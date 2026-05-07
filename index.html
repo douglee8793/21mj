@@ -100,7 +100,6 @@
         }
 
         .btn-role { background: #ddd; color: #333; flex: 1; }
-        /* 強制加上顏色顯示 */
         .btn-role.selected-hu { background: #2196f3 !important; color: white !important; }
         .btn-role.selected-pao { background: #f44336 !important; color: white !important; }
         .btn-role.selected-zimo { background: #ff9800 !important; color: white !important; }
@@ -271,13 +270,11 @@
             btnGroup.className = 'btn-group';
 
             if (winType == "0") {
-                // 胡按鈕
                 const huBtn = document.createElement('button');
                 huBtn.className = `btn-role ${records.hu === idx ? 'selected-hu' : ''}`;
                 huBtn.innerText = "胡";
                 huBtn.onclick = () => setRole('hu', idx);
                 
-                // 炮按鈕
                 const paoBtn = document.createElement('button');
                 paoBtn.className = `btn-role ${records.pao === idx ? 'selected-pao' : ''}`;
                 paoBtn.innerText = "炮";
@@ -308,19 +305,15 @@
 
     function setRole(role, idx) {
         if (role === 'hu') {
-            // 如果點選胡的人原本是放炮，則取消他的放炮
             if (records.pao === idx) records.pao = null;
-            // 切換胡的選取狀態
             records.hu = (records.hu === idx) ? null : idx;
         } else if (role === 'pao') {
-            // 如果點選炮的人原本是胡，則取消他的胡
             if (records.hu === idx) records.hu = null;
-            // 切換炮的選取狀態
             records.pao = (records.pao === idx) ? null : idx;
         } else if (role === 'zimo') {
             records.zimo = (records.zimo === idx) ? null : idx;
         }
-        renderPlayers(); // 重新繪製以更新顏色
+        renderPlayers();
     }
 
     function setFlower(idx) {
@@ -336,6 +329,7 @@
         
         let roundRes = {};
         players.forEach(p => roundRes[p] = 0);
+        let confirmMsg = "";
 
         if (winType == "0") {
             if (records.hu === null || records.pao === null) return alert("請選胡家與放炮家");
@@ -345,18 +339,18 @@
             roundRes[players[records.hu]] += amount;
             roundRes[players[records.pao]] -= amount;
 
+            confirmMsg = `【放炮模式】\n胡家：${players[records.hu]} (+${amount})\n放炮：${players[records.pao]} (-${amount})`;
+
             if (records.flowerTarget !== null) {
                 if (records.flowerTarget === records.pao) {
                     roundRes[players[idleIndex]] -= base;
                     roundRes[players[records.hu]] += base;
+                    confirmMsg += `\n插花(輸)：${players[idleIndex]} (-${base})`;
                 } else if (records.flowerTarget === records.hu) {
                     roundRes[players[idleIndex]] += base;
                     roundRes[players[records.pao]] -= base;
+                    confirmMsg += `\n插花(贏)：${players[idleIndex]} (+${base})`;
                 }
-            }
-            if (document.getElementById('autoRotate').checked) {
-                document.getElementById('idleSelect').value = records.pao;
-                assignSeats();
             }
         } else {
             if (records.zimo === null) return alert("請選自摸家");
@@ -366,16 +360,16 @@
             let baseWin = base + tai * perTai;
             let dealerAdd = extraTaiCount * perTai;
 
+            confirmMsg = `【自摸模式】\n自摸：${players[records.zimo]}\n總台數：${tai}\n莊家加台：${extraTaiCount}\n\n明細：`;
+
             seatIndices.forEach(idx => {
                 if (idx === records.zimo) return;
-                
                 let loss = baseWin;
-                if (records.zimo !== dealerIdx && idx === dealerIdx) {
-                    loss += dealerAdd;
-                }
+                if (records.zimo !== dealerIdx && idx === dealerIdx) loss += dealerAdd;
                 
                 roundRes[players[idx]] -= loss;
                 roundRes[players[records.zimo]] += loss;
+                confirmMsg += `\n${players[idx]}: -${loss}`;
             });
 
             if (records.flowerTarget !== null) {
@@ -386,22 +380,30 @@
                             roundRes[players[idleIndex]] += base;
                         }
                     });
+                    confirmMsg += `\n插花(贏)：${players[idleIndex]} 贏三家共 +${base * 3}`;
                 } else {
                     roundRes[players[idleIndex]] -= base;
                     roundRes[players[records.zimo]] += base;
+                    confirmMsg += `\n插花(輸)：${players[idleIndex]} -${base}`;
                 }
             }
         }
+
+        // 防呆確認
+        if (!confirm(confirmMsg + "\n\n確定要增加這筆戰績嗎？")) return;
 
         players.forEach(p => totalScores[p] += roundRes[p]);
         history.push({ res: roundRes, cumu: {...totalScores} });
         updateTable();
         
-        // 紀錄完後重置選取與台數
+        if (winType == "0" && document.getElementById('autoRotate').checked) {
+            document.getElementById('idleSelect').value = records.pao;
+            assignSeats();
+        }
+
         resetSelections();
         document.getElementById('taiCount').value = 0;
         renderPlayers();
-        
         alert("紀錄成功！");
     }
 
@@ -420,9 +422,12 @@
 
     function deleteLast() {
         if (history.length === 0) return;
-        let last = history.pop();
-        players.forEach(p => totalScores[p] -= last.res[p]);
-        updateTable();
+        if (confirm("確定要刪除最後一局的紀錄嗎？此動作無法復原。")) {
+            let last = history.pop();
+            players.forEach(p => totalScores[p] -= last.res[p]);
+            updateTable();
+            alert("已刪除最後一局。");
+        }
     }
 
     init();
