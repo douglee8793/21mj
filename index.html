@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>麻將計分工具 - Web 版</title>
+    <title>麻將計分工具 - 5人專業版</title>
     <style>
         :root {
             --primary: #673ab7;
@@ -16,7 +16,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg);
             margin: 0;
-            padding: 20px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -29,15 +29,16 @@
             padding: 20px;
             border-radius: 15px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            box-sizing: border-box;
         }
 
-        h2 { text-align: center; color: #333; }
+        h2 { text-align: center; color: #333; margin-top: 0; }
 
         .settings-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             background: #fff3e0;
             padding: 15px;
             border-radius: 10px;
@@ -49,8 +50,10 @@
             gap: 5px;
         }
 
+        label { font-size: 14px; font-weight: bold; color: #555; }
+
         select, input {
-            padding: 8px;
+            padding: 10px;
             border-radius: 5px;
             border: 1px solid #ddd;
             font-size: 16px;
@@ -61,24 +64,23 @@
             align-items: center;
             justify-content: space-between;
             font-size: 14px;
+            grid-column: span 2;
         }
 
-        /* 玩家卡片 */
         .player-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
-            margin-top: 20px;
+            margin-top: 10px;
         }
 
         .player-card {
-            background: #eeeeee;
-            padding: 15px;
+            background: #f9f9f9;
+            padding: 12px;
             border-radius: 12px;
             text-align: center;
+            border: 1px solid #eee;
         }
-
-        .player-card.active-dealer { border: 2px solid var(--secondary); }
 
         .btn-group {
             display: flex;
@@ -88,19 +90,22 @@
         }
 
         button {
-            padding: 8px 12px;
+            padding: 8px 10px;
             border: none;
             border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 14px;
             transition: 0.2s;
         }
 
-        .btn-role { background: #ddd; color: #333; }
-        .btn-role.selected-hu { background: #2196f3; color: white; }
-        .btn-role.selected-pao { background: #f44336; color: white; }
-        .btn-role.selected-zimo { background: #ff9800; color: white; }
-        .btn-flower { background: rgba(103, 58, 183, 0.2); color: #673ab7; }
+        .btn-role { background: #ddd; color: #333; flex: 1; }
+        /* 強制加上顏色顯示 */
+        .btn-role.selected-hu { background: #2196f3 !important; color: white !important; }
+        .btn-role.selected-pao { background: #f44336 !important; color: white !important; }
+        .btn-role.selected-zimo { background: #ff9800 !important; color: white !important; }
+        
+        .btn-flower { background: #eceff1; color: #607d8b; }
         .btn-flower.selected { background: #673ab7; color: white; }
 
         .main-action {
@@ -110,84 +115,98 @@
             color: white;
             font-size: 18px;
             margin-top: 20px;
+            border-radius: 10px;
         }
 
-        /* 表格樣式 */
         .history-section {
             margin-top: 30px;
             overflow-x: auto;
             width: 100%;
+            -webkit-overflow-scrolling: touch;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
             text-align: center;
+            font-size: 14px;
+            min-width: 450px;
         }
 
-        th { background: var(--secondary); color: white; padding: 10px; }
-        td { border: 1px solid #ddd; padding: 8px; }
-        tr:nth-child(even) { background: #f9f9f9; }
+        th { 
+            background: var(--secondary); 
+            color: white; 
+            padding: 10px 5px; 
+            white-space: nowrap; 
+        }
 
-        .delete-btn {
-            background: none;
-            color: var(--danger);
-            text-decoration: underline;
-            margin-top: 10px;
-            font-size: 14px;
+        td { 
+            border: 1px solid #ddd; 
+            padding: 8px 4px; 
+            white-space: nowrap; 
+        }
+
+        #dealerSection {
+            text-align: center; 
+            padding: 15px; 
+            background: #e1f5fe; 
+            border-radius: 10px; 
+            margin-bottom: 15px;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🀄 5人麻將計分工具</h2>
+    <h2>🀄 2年1班麻將計分工具 網路版</h2>
 
     <div class="settings-grid">
         <div class="control-group">
             <label>底價</label>
-            <input type="number" id="baseScore" value="100" step="10">
+            <input type="number" id="baseScore" value="100">
         </div>
         <div class="control-group">
             <label>台金</label>
-            <input type="number" id="maxTai" value="30" step="10">
+            <input type="number" id="maxTai" value="30">
         </div>
         <div class="control-group">
-            <label>目前閒家</label>
+            <label>目前閒家(不打)</label>
             <select id="idleSelect" onchange="assignSeats()"></select>
         </div>
-        <div class="toggle-group">
-            <span>自動換人</span>
-            <input type="checkbox" id="autoRotate" checked>
-        </div>
-    </div>
-
-    <div class="settings-grid">
         <div class="control-group">
             <label>勝負方式</label>
-            <select id="winType" onchange="renderPlayers()">
+            <select id="winType" onchange="resetSelections(); renderPlayers();">
                 <option value="0">放炮</option>
                 <option value="1">自摸</option>
             </select>
         </div>
-        <div class="control-group">
-            <label>台數</label>
-            <input type="number" id="taiCount" value="0" min="0">
-        </div>
         <div class="toggle-group">
-            <span>插花功能</span>
-            <input type="checkbox" id="flowerEnabled" onchange="renderPlayers()">
+            <label><input type="checkbox" id="autoRotate" checked> 自動換閒家</label>
+            <label><input type="checkbox" id="flowerEnabled" onchange="renderPlayers()"> 插花功能</label>
         </div>
     </div>
 
-    <div id="dealerSection" style="display:none; text-align:center; padding:10px; background:#e1f5fe; border-radius:10px; margin-bottom:10px;">
-        <label>莊家是誰？</label>
-        <select id="dealerSelect"></select>
-        <label>莊家加台：</label>
-        <input type="number" id="extraTai" value="0" style="width:50px">
+    <div id="dealerSection" style="display:none;">
+        <div style="display: flex; justify-content: space-around; align-items: center;">
+            <div class="control-group">
+                <label>莊家是誰？</label>
+                <select id="dealerSelect"></select>
+            </div>
+            <div class="control-group">
+                <label>莊家加台</label>
+                <input type="number" id="extraTai" value="0" style="width:60px">
+            </div>
+        </div>
     </div>
 
-    <div class="player-grid" id="playerGrid"></div>
+    <div class="settings-grid" style="background: #e8f5e9;">
+        <div class="control-group" style="grid-column: span 2;">
+            <label>輸入台數 (自摸請輸入含自摸在內的總台數)</label>
+            <input type="number" id="taiCount" value="0">
+        </div>
+    </div>
+
+    <div id="playerGrid" class="player-grid"></div>
 
     <button class="main-action" onclick="addRecord()">增加戰績</button>
 
@@ -197,14 +216,14 @@
             <thead><tr id="tableHeader"></tr></thead>
             <tbody id="tableBody"></tbody>
         </table>
-        <button class="delete-btn" onclick="deleteLast()">刪除最新一局</button>
+        <button onclick="deleteLast()" style="color:red; background:none; text-decoration:underline; width:100%; margin-top:10px;">刪除最後一局</button>
     </div>
 </div>
 
 <script>
     const players = ["高玉川", "李中禕", "周樹偉", "詹偉凱", "戴志清"];
     let idleIndex = 0;
-    let seatIndices = [1, 2, 3, 4];
+    let seatIndices = [];
     let records = { hu: null, pao: null, zimo: null, flowerTarget: null };
     let history = [];
     let totalScores = {};
@@ -214,8 +233,7 @@
     function init() {
         const idleSelect = document.getElementById('idleSelect');
         players.forEach((name, i) => {
-            let opt = new Option(name, i);
-            idleSelect.add(opt);
+            idleSelect.add(new Option(name, i));
         });
         assignSeats();
     }
@@ -223,8 +241,12 @@
     function assignSeats() {
         idleIndex = parseInt(document.getElementById('idleSelect').value);
         seatIndices = [0, 1, 2, 3, 4].filter(i => i !== idleIndex);
-        records = { hu: null, pao: null, zimo: null, flowerTarget: null };
+        resetSelections();
         renderPlayers();
+    }
+
+    function resetSelections() {
+        records = { hu: null, pao: null, zimo: null, flowerTarget: null };
     }
 
     function renderPlayers() {
@@ -235,12 +257,9 @@
         
         dealerSection.style.display = winType == "1" ? "block" : "none";
         
-        // 更新自摸模式的莊家下拉選單
-        const dealerSelect = document.getElementById('dealerSelect');
-        dealerSelect.innerHTML = "";
-        seatIndices.forEach(idx => {
-            dealerSelect.add(new Option(players[idx], idx));
-        });
+        const dSelect = document.getElementById('dealerSelect');
+        dSelect.innerHTML = "";
+        seatIndices.forEach(idx => dSelect.add(new Option(players[idx], idx)));
 
         grid.innerHTML = "";
         seatIndices.forEach(idx => {
@@ -252,14 +271,34 @@
             btnGroup.className = 'btn-group';
 
             if (winType == "0") {
-                btnGroup.innerHTML += `<button class="btn-role ${records.hu === idx ? 'selected-hu' : ''}" onclick="setRole('hu', ${idx})">胡人</button>`;
-                btnGroup.innerHTML += `<button class="btn-role ${records.pao === idx ? 'selected-pao' : ''}" onclick="setRole('pao', ${idx})">放炮</button>`;
+                // 胡按鈕
+                const huBtn = document.createElement('button');
+                huBtn.className = `btn-role ${records.hu === idx ? 'selected-hu' : ''}`;
+                huBtn.innerText = "胡";
+                huBtn.onclick = () => setRole('hu', idx);
+                
+                // 炮按鈕
+                const paoBtn = document.createElement('button');
+                paoBtn.className = `btn-role ${records.pao === idx ? 'selected-pao' : ''}`;
+                paoBtn.innerText = "炮";
+                paoBtn.onclick = () => setRole('pao', idx);
+                
+                btnGroup.appendChild(huBtn);
+                btnGroup.appendChild(paoBtn);
             } else {
-                btnGroup.innerHTML += `<button class="btn-role ${records.zimo === idx ? 'selected-zimo' : ''}" onclick="setRole('zimo', ${idx})">自摸</button>`;
+                const zimoBtn = document.createElement('button');
+                zimoBtn.className = `btn-role ${records.zimo === idx ? 'selected-zimo' : ''}`;
+                zimoBtn.innerText = "自摸";
+                zimoBtn.onclick = () => setRole('zimo', idx);
+                btnGroup.appendChild(zimoBtn);
             }
 
             if (flowerEnabled) {
-                btnGroup.innerHTML += `<button class="btn-flower ${records.flowerTarget === idx ? 'selected' : ''}" onclick="setFlower(${idx})">被插</button>`;
+                const flowerBtn = document.createElement('button');
+                flowerBtn.className = `btn-flower ${records.flowerTarget === idx ? 'selected' : ''}`;
+                flowerBtn.innerText = "插花";
+                flowerBtn.onclick = () => setFlower(idx);
+                btnGroup.appendChild(flowerBtn);
             }
 
             card.appendChild(btnGroup);
@@ -268,10 +307,20 @@
     }
 
     function setRole(role, idx) {
-        if (role === 'hu') { records.hu = idx; if(records.pao === idx) records.pao = null; }
-        if (role === 'pao') { records.pao = idx; if(records.hu === idx) records.hu = null; }
-        if (role === 'zimo') { records.zimo = idx; }
-        renderPlayers();
+        if (role === 'hu') {
+            // 如果點選胡的人原本是放炮，則取消他的放炮
+            if (records.pao === idx) records.pao = null;
+            // 切換胡的選取狀態
+            records.hu = (records.hu === idx) ? null : idx;
+        } else if (role === 'pao') {
+            // 如果點選炮的人原本是胡，則取消他的胡
+            if (records.hu === idx) records.hu = null;
+            // 切換炮的選取狀態
+            records.pao = (records.pao === idx) ? null : idx;
+        } else if (role === 'zimo') {
+            records.zimo = (records.zimo === idx) ? null : idx;
+        }
+        renderPlayers(); // 重新繪製以更新顏色
     }
 
     function setFlower(idx) {
@@ -289,12 +338,13 @@
         players.forEach(p => roundRes[p] = 0);
 
         if (winType == "0") {
-            if (records.hu === null || records.pao === null) return alert("請選擇胡家與放炮家");
+            if (records.hu === null || records.pao === null) return alert("請選胡家與放炮家");
+            if (records.hu === records.pao) return alert("胡家與放炮家不可為同一人");
+            
             let amount = base + tai * perTai;
             roundRes[players[records.hu]] += amount;
             roundRes[players[records.pao]] -= amount;
 
-            // 插花
             if (records.flowerTarget !== null) {
                 if (records.flowerTarget === records.pao) {
                     roundRes[players[idleIndex]] -= base;
@@ -304,27 +354,37 @@
                     roundRes[players[records.pao]] -= base;
                 }
             }
+            if (document.getElementById('autoRotate').checked) {
+                document.getElementById('idleSelect').value = records.pao;
+                assignSeats();
+            }
         } else {
-            if (records.zimo === null) return alert("請選擇自摸家");
+            if (records.zimo === null) return alert("請選自摸家");
             let dealerIdx = parseInt(document.getElementById('dealerSelect').value);
-            let extra = parseInt(document.getElementById('extraTai').value);
-            let finalTai = (tai === 0) ? 1 : tai + 1;
-            let amount = base + finalTai * perTai;
-            let dealerAdd = extra * perTai;
+            let extraTaiCount = parseInt(document.getElementById('extraTai').value);
+            
+            let baseWin = base + tai * perTai;
+            let dealerAdd = extraTaiCount * perTai;
 
             seatIndices.forEach(idx => {
                 if (idx === records.zimo) return;
-                let loss = amount + (idx === dealerIdx ? dealerAdd : 0);
+                
+                let loss = baseWin;
+                if (records.zimo !== dealerIdx && idx === dealerIdx) {
+                    loss += dealerAdd;
+                }
+                
                 roundRes[players[idx]] -= loss;
                 roundRes[players[records.zimo]] += loss;
             });
 
-            // 插花
             if (records.flowerTarget !== null) {
                 if (records.flowerTarget === records.zimo) {
-                    roundRes[players[idleIndex]] += 3 * base;
                     seatIndices.forEach(idx => {
-                        if (idx !== records.zimo) roundRes[players[idx]] -= base;
+                        if (idx !== records.zimo) {
+                            roundRes[players[idx]] -= base;
+                            roundRes[players[idleIndex]] += base;
+                        }
                     });
                 } else {
                     roundRes[players[idleIndex]] -= base;
@@ -333,28 +393,26 @@
             }
         }
 
-        // 更新總分
         players.forEach(p => totalScores[p] += roundRes[p]);
         history.push({ res: roundRes, cumu: {...totalScores} });
-
-        // 自動換人
-        if (document.getElementById('autoRotate').checked && winType == "0") {
-            document.getElementById('idleSelect').value = records.pao;
-            assignSeats();
-        }
-
         updateTable();
+        
+        // 紀錄完後重置選取與台數
+        resetSelections();
+        document.getElementById('taiCount').value = 0;
+        renderPlayers();
+        
         alert("紀錄成功！");
     }
 
     function updateTable() {
         const header = document.getElementById('tableHeader');
-        header.innerHTML = "<th>局數</th>" + players.map(p => `<th>${p}</th>`).join("");
+        header.innerHTML = "<th>局</th>" + players.map(p => `<th>${p}</th>`).join("");
 
         const body = document.getElementById('tableBody');
         body.innerHTML = history.map((h, i) => `
             <tr>
-                <td>第${i+1}局</td>
+                <td>${i+1}</td>
                 ${players.map(p => `<td>${h.cumu[p]}</td>`).join("")}
             </tr>
         `).join("");
