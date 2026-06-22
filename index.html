@@ -330,6 +330,18 @@
         /* ── Token setup ── */
         .token-note { font-size: 12px; color: #888; margin-top: 5px; line-height: 1.5; }
         .loading-msg { text-align: center; color: #888; padding: 20px; font-size: 14px; }
+        .setup-section { border-top: 1px solid #eee; margin-top: 15px; padding-top: 15px; }
+        .setup-section summary { font-size: 13px; color: #aaa; cursor: pointer; }
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+        .status-set { background: #e8f5e9; color: #2e7d32; }
+        .status-unset { background: #fff3e0; color: #e65100; }
     </style>
 </head>
 <body>
@@ -427,19 +439,42 @@
 <!-- Token Setup Modal -->
 <div class="modal-overlay" id="tokenModal">
     <div class="modal">
-        <h3>⚙️ GitHub 設定</h3>
-        <div class="control-group">
-            <label>GitHub Personal Access Token</label>
-            <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx">
+        <h3>⚙️ 儲存設定</h3>
+        <div id="tokenStatus"></div>
+
+        <!-- 一般使用者：輸入密碼測試 -->
+        <div id="sectionUnlock">
+            <div class="control-group">
+                <label>密碼</label>
+                <input type="password" id="unlockPassword" placeholder="輸入密碼以驗證">
+            </div>
+            <p class="token-note">輸入密碼後即可在任何裝置儲存場次紀錄。</p>
         </div>
-        <p class="token-note">
-            Token 只存在此裝置（localStorage），不會上傳。<br>
-            需要儲存場次資料時才需設定。<br>
-            至 GitHub → Settings → Developer settings → Personal access tokens → 產生 token，勾選 <strong>repo</strong> 權限。
-        </p>
+
+        <!-- 管理者設定區 -->
+        <details class="setup-section">
+            <summary>管理者設定（首次或重設用）</summary>
+            <div style="margin-top:12px;">
+                <div class="control-group" style="margin-bottom:10px;">
+                    <label>GitHub Token</label>
+                    <input type="password" id="adminToken" placeholder="ghp_xxxxxxxxxxxx">
+                </div>
+                <div class="control-group" style="margin-bottom:10px;">
+                    <label>設定密碼</label>
+                    <input type="password" id="adminPassword" placeholder="自訂一個簡單密碼">
+                </div>
+                <div class="control-group">
+                    <label>確認密碼</label>
+                    <input type="password" id="adminPassword2" placeholder="再輸入一次">
+                </div>
+                <p class="token-note">Token 會加密後存到 GitHub repo，本身不會明文儲存。</p>
+                <button class="btn-confirm" style="width:100%;margin-top:10px;" onclick="adminSetup()">加密並儲存設定</button>
+            </div>
+        </details>
+
         <div class="modal-btns">
-            <button class="btn-cancel" onclick="closeTokenModal()">取消</button>
-            <button class="btn-confirm" onclick="saveToken()">儲存</button>
+            <button class="btn-cancel" onclick="closeTokenModal()">關閉</button>
+            <button class="btn-confirm" onclick="verifyPassword()">驗證密碼</button>
         </div>
     </div>
 </div>
@@ -479,20 +514,130 @@
     let currentTab = 'sessions';
     let historyData = null;
 
-    // ── Token ──
-    function getToken() { return localStorage.getItem('gh_token') || ''; }
-    function saveToken() {
-        const t = document.getElementById('tokenInput').value.trim();
-        if (t) localStorage.setItem('gh_token', t);
-        else localStorage.removeItem('gh_token');
-        closeTokenModal();
-        alert(t ? 'Token 已儲存！' : 'Token 已清除。');
+    // ── Crypto helpers ──
+    const CONFIG_API = "https://api.github.com/repos/" + REPO + "/contents/config.json";
+
+    function b64ToBytes(b64) {
+        return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
     }
-    function openTokenModal() {
-        document.getElementById('tokenInput').value = getToken();
+    function bytesToB64(buf) {
+        return btoa(String.fromCharCode(...new Uint8Array(buf)));
+    }
+    async function deriveKey(password, salt) {
+        const enc = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+        return crypto.subtle.deriveKey(
+            { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+            keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+        );
+    }
+    async function encryptToken(token, password) {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const iv   = crypto.getRandomValues(new Uint8Array(12));
+        const key  = await deriveKey(password, salt);
+        const enc  = new TextEncoder();
+        const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(token));
+        return { tokenEncrypted: bytesToB64(encrypted), salt: bytesToB64(salt), iv: bytesToB64(iv) };
+    }
+    async function decryptToken(cfg, password) {
+        const salt = b64ToBytes(cfg.salt);
+        const iv   = b64ToBytes(cfg.iv);
+        const data = b64ToBytes(cfg.tokenEncrypted);
+        const key  = await deriveKey(password, salt);
+        const dec  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+        return new TextDecoder().decode(dec);
+    }
+
+    // ── Config (encrypted token in repo) ──
+    let cachedConfig = null;
+    async function fetchConfig() {
+        if (cachedConfig) return cachedConfig;
+        const res = await fetch(CONFIG_API + '?t=' + Date.now());
+        if (!res.ok) throw new Error('無法讀取設定檔');
+        const json = await res.json();
+        cachedConfig = { data: JSON.parse(atob(json.content.replace(/\n/g, ''))), sha: json.sha };
+        return cachedConfig;
+    }
+    async function pushConfig(data, sha, token) {
+        const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+        const res = await fetch(CONFIG_API, {
+            method: 'PUT',
+            headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: '更新加密設定', content, sha })
+        });
+        if (!res.ok) { const e = await res.json(); throw new Error(e.message || '儲存失敗'); }
+    }
+
+    // ── Token modal ──
+    async function openTokenModal() {
         document.getElementById('tokenModal').classList.add('open');
+        document.getElementById('unlockPassword').value = '';
+        document.getElementById('adminToken').value = '';
+        document.getElementById('adminPassword').value = '';
+        document.getElementById('adminPassword2').value = '';
+        const statusEl = document.getElementById('tokenStatus');
+        try {
+            const { data } = await fetchConfig();
+            const isSet = !!data.tokenEncrypted;
+            statusEl.innerHTML = isSet
+                ? '<span class="status-badge status-set">✅ 已設定加密 Token</span>'
+                : '<span class="status-badge status-unset">⚠️ 尚未設定 Token</span>';
+        } catch { statusEl.innerHTML = ''; }
     }
     function closeTokenModal() { document.getElementById('tokenModal').classList.remove('open'); }
+
+    async function verifyPassword() {
+        const password = document.getElementById('unlockPassword').value;
+        if (!password) return alert('請輸入密碼');
+        try {
+            const { data } = await fetchConfig();
+            if (!data.tokenEncrypted) return alert('尚未設定 Token，請展開管理者設定區塊進行設定');
+            await decryptToken(data, password);
+            localStorage.setItem('mj_password', password);
+            closeTokenModal();
+            alert('✅ 密碼正確，已儲存在此裝置！');
+        } catch { alert('❌ 密碼錯誤'); }
+    }
+
+    async function adminSetup() {
+        const token    = document.getElementById('adminToken').value.trim();
+        const password = document.getElementById('adminPassword').value;
+        const password2= document.getElementById('adminPassword2').value;
+        if (!token)    return alert('請填入 GitHub Token');
+        if (!password) return alert('請設定密碼');
+        if (password !== password2) return alert('兩次密碼不一致');
+        const btn = document.querySelector('#tokenModal .setup-section .btn-confirm');
+        btn.textContent = '處理中…'; btn.disabled = true;
+        try {
+            const { data, sha } = await fetchConfig();
+            const encrypted = await encryptToken(token, password);
+            await pushConfig(encrypted, sha, token);
+            cachedConfig = null;
+            localStorage.setItem('mj_password', password);
+            closeTokenModal();
+            alert('✅ 設定完成！Token 已加密儲存到 GitHub。');
+        } catch (e) { alert('❌ 失敗：' + e.message); }
+        finally { btn.textContent = '加密並儲存設定'; btn.disabled = false; }
+    }
+
+    // ── Get decrypted token (with password) ──
+    async function getDecryptedToken() {
+        let password = localStorage.getItem('mj_password');
+        if (!password) {
+            password = prompt('請輸入儲存密碼：');
+            if (!password) throw new Error('已取消');
+        }
+        const { data } = await fetchConfig();
+        if (!data.tokenEncrypted) throw new Error('尚未設定 Token，請在 ⚙️ 管理者設定區塊完成設定');
+        try {
+            const token = await decryptToken(data, password);
+            localStorage.setItem('mj_password', password);
+            return token;
+        } catch {
+            localStorage.removeItem('mj_password');
+            throw new Error('密碼錯誤');
+        }
+    }
 
     // ── GitHub API ──
     async function fetchHistory() {
@@ -504,21 +649,14 @@
     }
 
     async function pushHistory(data, sha, message) {
-        const token = getToken();
-        if (!token) throw new Error('請先在 ⚙️ 設定中填入 GitHub Token');
+        const token = await getDecryptedToken();
         const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
         const res = await fetch(API_BASE, {
             method: 'PUT',
-            headers: {
-                'Authorization': 'token ' + token,
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
             body: JSON.stringify({ message, content, sha })
         });
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.message || '儲存失敗');
-        }
+        if (!res.ok) { const err = await res.json(); throw new Error(err.message || '儲存失敗'); }
     }
 
     // ── Save session ──
