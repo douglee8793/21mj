@@ -16,7 +16,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg);
             margin: 0;
-            padding: 15px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -26,10 +26,15 @@
             max-width: 600px;
             width: 100%;
             background: white;
-            padding: 20px;
+            padding: 15px;
             border-radius: 15px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             box-sizing: border-box;
+        }
+
+        @media (max-width: 400px) {
+            body { padding: 6px; }
+            .container { padding: 12px; border-radius: 10px; }
         }
 
         h2 { text-align: center; color: #333; margin-top: 0; }
@@ -84,6 +89,7 @@
 
         .btn-group {
             display: flex;
+            flex-wrap: wrap;
             justify-content: center;
             gap: 5px;
             margin-top: 10px;
@@ -99,12 +105,12 @@
             transition: 0.2s;
         }
 
-        .btn-role { background: #ddd; color: #333; flex: 1; }
+        .btn-role { background: #ddd; color: #333; flex: 1; min-width: 40px; }
         .btn-role.selected-hu { background: #2196f3 !important; color: white !important; }
         .btn-role.selected-pao { background: #f44336 !important; color: white !important; }
         .btn-role.selected-zimo { background: #ff9800 !important; color: white !important; }
-        
-        .btn-flower { background: #eceff1; color: #607d8b; }
+
+        .btn-flower { background: #eceff1; color: #607d8b; width: 100%; }
         .btn-flower.selected { background: #673ab7; color: white; }
 
         .main-action {
@@ -128,8 +134,13 @@
             width: 100%;
             border-collapse: collapse;
             text-align: center;
-            font-size: 14px;
-            min-width: 450px;
+            font-size: 13px;
+            min-width: 380px;
+        }
+
+        @media (max-width: 400px) {
+            table { font-size: 11px; min-width: 320px; }
+            th, td { padding: 6px 3px; }
         }
 
         th { 
@@ -186,14 +197,14 @@
     </div>
 
     <div id="dealerSection" style="display:none;">
-        <div style="display: flex; justify-content: space-around; align-items: center;">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-around; align-items: center; gap: 10px;">
             <div class="control-group">
                 <label>莊家是誰？</label>
                 <select id="dealerSelect"></select>
             </div>
             <div class="control-group">
                 <label>莊家加台</label>
-                <input type="number" id="extraTai" value="0" style="width:60px">
+                <input type="number" id="extraTai" value="0" style="width:70px">
             </div>
         </div>
     </div>
