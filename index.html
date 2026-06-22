@@ -231,7 +231,7 @@
     <div class="settings-grid" style="background: #e8f5e9;">
         <div class="control-group" style="grid-column: span 2;">
             <label>輸入台數 (自摸請輸入含自摸在內的總台數)</label>
-            <input type="number" id="taiCount" value="0">
+            <input type="number" id="taiCount" value="0" min="0">
         </div>
     </div>
 
@@ -285,6 +285,14 @@
         const dealerSection = document.getElementById('dealerSection');
         
         dealerSection.style.display = winType == "1" ? "block" : "none";
+
+        const taiInput = document.getElementById('taiCount');
+        if (winType == "1") {
+            taiInput.min = 1;
+            if (parseInt(taiInput.value) < 1) taiInput.value = 1;
+        } else {
+            taiInput.min = 0;
+        }
         
         const dSelect = document.getElementById('dealerSelect');
         dSelect.innerHTML = "";
@@ -356,6 +364,8 @@
         const base = parseInt(document.getElementById('baseScore').value);
         const perTai = parseInt(document.getElementById('maxTai').value);
         const tai = parseInt(document.getElementById('taiCount').value);
+        if (winType == "0" && tai < 0) return alert("放炮台數不能是負數");
+        if (winType == "1" && tai < 1) return alert("自摸台數最少需要 1 台");
         
         let roundRes = {};
         players.forEach(p => roundRes[p] = 0);
