@@ -231,7 +231,7 @@
     <div class="settings-grid" style="background: #e8f5e9;">
         <div class="control-group" style="grid-column: span 2;">
             <label>輸入台數 (自摸請輸入含自摸在內的總台數)</label>
-            <input type="number" id="taiCount" value="0" min="0">
+            <input type="number" id="taiCount" value="0" min="0" inputmode="numeric" oninput="clampTai(this)">
         </div>
     </div>
 
@@ -258,6 +258,13 @@
     let totalScores = {};
 
     players.forEach(p => totalScores[p] = 0);
+
+    function clampTai(input) {
+        const winType = document.getElementById('winType').value;
+        const min = winType == "1" ? 1 : 0;
+        const val = parseInt(input.value);
+        if (isNaN(val) || val < min) input.value = min;
+    }
 
     function init() {
         const idleSelect = document.getElementById('idleSelect');
