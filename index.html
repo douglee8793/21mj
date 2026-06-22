@@ -566,7 +566,13 @@
             headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: '更新加密設定', content, sha })
         });
-        if (!res.ok) { const e = await res.json(); throw new Error(e.message || '儲存失敗'); }
+        if (!res.ok) {
+            const e = await res.json();
+            const msg = e.message === 'Not Found'
+                ? 'Token 權限不足，請確認已勾選 public_repo 權限'
+                : (e.message || '儲存失敗');
+            throw new Error(msg);
+        }
     }
 
     // ── Token modal ──
