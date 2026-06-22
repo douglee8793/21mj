@@ -10,15 +10,11 @@
             --secondary: #ff9800;
             --danger: #f44336;
             --bg: #f5f5f5;
+            --green: #4caf50;
         }
 
-        *, *::before, *::after {
-            box-sizing: border-box;
-        }
-
-        html {
-            overflow-x: hidden;
-        }
+        *, *::before, *::after { box-sizing: border-box; }
+        html { overflow-x: hidden; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -37,7 +33,6 @@
             padding: 15px;
             border-radius: 15px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            box-sizing: border-box;
         }
 
         @media (max-width: 400px) {
@@ -45,8 +40,28 @@
             .container { padding: 12px; border-radius: 10px; }
         }
 
-        h2 { text-align: center; color: #333; margin-top: 0; }
+        /* ── Header ── */
+        .header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .header-row h2 { margin: 0; font-size: 17px; color: #333; }
+        .header-btns { display: flex; gap: 6px; }
+        .icon-btn {
+            background: none;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #555;
+            white-space: nowrap;
+        }
+        .icon-btn:hover { background: #f0f0f0; }
 
+        /* ── Settings grid ── */
         .settings-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -56,24 +71,13 @@
             padding: 15px;
             border-radius: 10px;
         }
-
         @media (max-width: 480px) {
-            .settings-grid {
-                grid-template-columns: 1fr;
-            }
-            .toggle-group {
-                grid-column: span 1;
-            }
+            .settings-grid { grid-template-columns: 1fr; }
+            .toggle-group { grid-column: span 1; }
         }
 
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
         label { font-size: 14px; font-weight: bold; color: #555; }
-
         select, input {
             padding: 10px;
             border-radius: 5px;
@@ -82,7 +86,6 @@
             width: 100%;
             max-width: 100%;
         }
-
         .toggle-group {
             display: flex;
             align-items: center;
@@ -91,13 +94,13 @@
             grid-column: span 2;
         }
 
+        /* ── Player cards ── */
         .player-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
             margin-top: 10px;
         }
-
         .player-card {
             background: #f9f9f9;
             padding: 12px;
@@ -105,7 +108,6 @@
             text-align: center;
             border: 1px solid #eee;
         }
-
         .btn-group {
             display: flex;
             flex-wrap: wrap;
@@ -113,7 +115,6 @@
             gap: 5px;
             margin-top: 10px;
         }
-
         button {
             padding: 8px 10px;
             border: none;
@@ -123,15 +124,14 @@
             font-size: 14px;
             transition: 0.2s;
         }
-
         .btn-role { background: #ddd; color: #333; flex: 1; min-width: 40px; }
-        .btn-role.selected-hu { background: #2196f3 !important; color: white !important; }
+        .btn-role.selected-hu  { background: #2196f3 !important; color: white !important; }
         .btn-role.selected-pao { background: #f44336 !important; color: white !important; }
-        .btn-role.selected-zimo { background: #ff9800 !important; color: white !important; }
-
+        .btn-role.selected-zimo{ background: #ff9800 !important; color: white !important; }
         .btn-flower { background: #eceff1; color: #607d8b; width: 100%; }
         .btn-flower.selected { background: #673ab7; color: white; }
 
+        /* ── Action buttons ── */
         .main-action {
             width: 100%;
             padding: 15px;
@@ -141,14 +141,24 @@
             margin-top: 20px;
             border-radius: 10px;
         }
+        .save-session-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--green);
+            color: white;
+            font-size: 16px;
+            margin-top: 10px;
+            border-radius: 10px;
+            display: none;
+        }
 
+        /* ── Current session table ── */
         .history-section {
             margin-top: 30px;
             overflow-x: auto;
             width: 100%;
             -webkit-overflow-scrolling: touch;
         }
-
         table {
             width: 100%;
             border-collapse: collapse;
@@ -156,38 +166,181 @@
             font-size: 13px;
             min-width: 380px;
         }
-
         @media (max-width: 400px) {
             table { font-size: 11px; min-width: 320px; }
             th, td { padding: 6px 3px; }
         }
-
-        th { 
-            background: var(--secondary); 
-            color: white; 
-            padding: 10px 5px; 
-            white-space: nowrap; 
-        }
-
-        td { 
-            border: 1px solid #ddd; 
-            padding: 8px 4px; 
-            white-space: nowrap; 
-        }
+        th { background: var(--secondary); color: white; padding: 10px 5px; white-space: nowrap; }
+        td { border: 1px solid #ddd; padding: 8px 4px; white-space: nowrap; }
+        .pos { color: #2e7d32; font-weight: bold; }
+        .neg { color: #c62828; font-weight: bold; }
 
         #dealerSection {
-            text-align: center; 
-            padding: 15px; 
-            background: #e1f5fe; 
-            border-radius: 10px; 
+            text-align: center;
+            padding: 15px;
+            background: #e1f5fe;
+            border-radius: 10px;
             margin-bottom: 15px;
         }
+
+        /* ── Modal overlay ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+        }
+        .modal h3 { margin-top: 0; color: #333; }
+        .modal-btns { display: flex; gap: 10px; margin-top: 15px; }
+        .modal-btns button { flex: 1; padding: 12px; font-size: 15px; }
+        .btn-cancel { background: #eee; color: #555; }
+        .btn-confirm { background: var(--primary); color: white; }
+        .btn-confirm-green { background: var(--green); color: white; }
+
+        /* ── History panel ── */
+        .panel-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 90;
+        }
+        .panel-overlay.open { display: block; }
+        .side-panel {
+            position: fixed;
+            top: 0; right: 0;
+            width: min(420px, 100vw);
+            height: 100%;
+            background: white;
+            z-index: 95;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .side-panel.open { transform: translateX(0); }
+        .panel-header {
+            padding: 15px;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .panel-header h3 { margin: 0; font-size: 16px; }
+        .panel-close {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .panel-tabs {
+            display: flex;
+            border-bottom: 2px solid #eee;
+            flex-shrink: 0;
+        }
+        .panel-tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            color: #888;
+            background: white;
+            border: none;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
+        .panel-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* ── Session cards ── */
+        .session-card {
+            border: 1px solid #eee;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+        .session-head {
+            background: #f5f5f5;
+            padding: 10px 15px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .session-head:hover { background: #ede7f6; }
+        .session-date { font-weight: bold; font-size: 14px; color: #333; }
+        .session-venue { font-size: 12px; color: #888; }
+        .session-winner { font-size: 13px; color: var(--green); font-weight: bold; }
+        .session-detail {
+            display: none;
+            padding: 10px 15px;
+        }
+        .session-detail.open { display: block; }
+        .session-scores { width: 100%; font-size: 13px; }
+        .session-scores td { padding: 4px 8px; border: none; }
+        .session-scores tr:nth-child(odd) { background: #fafafa; }
+
+        /* ── Stats ── */
+        .stat-card {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin-bottom: 12px;
+        }
+        .stat-card h4 { margin: 0 0 10px; color: #555; font-size: 13px; text-transform: uppercase; }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+        .stat-row:last-child { border-bottom: none; }
+        .stat-name { color: #333; font-weight: bold; }
+        .stat-val { font-weight: bold; }
+
+        /* ── Token setup ── */
+        .token-note { font-size: 12px; color: #888; margin-top: 5px; line-height: 1.5; }
+        .loading-msg { text-align: center; color: #888; padding: 20px; font-size: 14px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🀄 2年1班麻將計分工具 網路版</h2>
+    <div class="header-row">
+        <h2>🀄 2年1班麻將計分工具</h2>
+        <div class="header-btns">
+            <button class="icon-btn" onclick="openHistoryPanel()">📊 歷史</button>
+            <button class="icon-btn" onclick="openTokenModal()">⚙️</button>
+        </div>
+    </div>
 
     <div class="settings-grid">
         <div class="control-group">
@@ -216,7 +369,7 @@
     </div>
 
     <div id="dealerSection" style="display:none;">
-        <div style="display: flex; flex-wrap: wrap; justify-content: space-around; align-items: center; gap: 10px;">
+        <div style="display:flex; flex-wrap:wrap; justify-content:space-around; align-items:center; gap:10px;">
             <div class="control-group">
                 <label>莊家是誰？</label>
                 <select id="dealerSelect"></select>
@@ -228,8 +381,8 @@
         </div>
     </div>
 
-    <div class="settings-grid" style="background: #e8f5e9;">
-        <div class="control-group" style="grid-column: span 2;">
+    <div class="settings-grid" style="background:#e8f5e9;">
+        <div class="control-group" style="grid-column:span 2;">
             <label>輸入台數 (自摸請輸入含自摸在內的總台數)</label>
             <input type="number" id="taiCount" value="0" min="0" inputmode="numeric" onblur="clampTai(this)">
         </div>
@@ -238,27 +391,325 @@
     <div id="playerGrid" class="player-grid"></div>
 
     <button class="main-action" onclick="addRecord()">增加戰績</button>
+    <button class="save-session-btn" id="saveSessionBtn" onclick="openSaveModal()">💾 儲存本場紀錄到歷史資料庫</button>
 
     <div class="history-section">
-        <h3>總積分表</h3>
+        <h3>本場積分表</h3>
         <table id="historyTable">
             <thead><tr id="tableHeader"></tr></thead>
             <tbody id="tableBody"></tbody>
         </table>
-        <button onclick="deleteLast()" style="color:red; background:none; text-decoration:underline; width:100%; margin-top:10px;">刪除最後一局</button>
+        <button onclick="deleteLast()" style="color:red;background:none;text-decoration:underline;width:100%;margin-top:10px;">刪除最後一局</button>
+    </div>
+</div>
+
+<!-- Save Session Modal -->
+<div class="modal-overlay" id="saveModal">
+    <div class="modal">
+        <h3>💾 儲存本場紀錄</h3>
+        <div class="control-group" style="margin-bottom:12px;">
+            <label>日期</label>
+            <input type="date" id="sessionDate">
+        </div>
+        <div class="control-group">
+            <label>場地</label>
+            <input type="text" id="sessionVenue" placeholder="例：高玉川家">
+        </div>
+        <div style="margin-top:12px; background:#f5f5f5; border-radius:8px; padding:10px; font-size:13px;" id="savePreview"></div>
+        <div class="modal-btns">
+            <button class="btn-cancel" onclick="closeSaveModal()">取消</button>
+            <button class="btn-confirm-green" onclick="confirmSave()">確認儲存</button>
+        </div>
+    </div>
+</div>
+
+<!-- Token Setup Modal -->
+<div class="modal-overlay" id="tokenModal">
+    <div class="modal">
+        <h3>⚙️ GitHub 設定</h3>
+        <div class="control-group">
+            <label>GitHub Personal Access Token</label>
+            <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx">
+        </div>
+        <p class="token-note">
+            Token 只存在此裝置（localStorage），不會上傳。<br>
+            需要儲存場次資料時才需設定。<br>
+            至 GitHub → Settings → Developer settings → Personal access tokens → 產生 token，勾選 <strong>repo</strong> 權限。
+        </p>
+        <div class="modal-btns">
+            <button class="btn-cancel" onclick="closeTokenModal()">取消</button>
+            <button class="btn-confirm" onclick="saveToken()">儲存</button>
+        </div>
+    </div>
+</div>
+
+<!-- History Panel -->
+<div class="panel-overlay" id="panelOverlay" onclick="closeHistoryPanel()"></div>
+<div class="side-panel" id="historyPanel">
+    <div class="panel-header">
+        <h3>📊 歷史資料庫</h3>
+        <button class="panel-close" onclick="closeHistoryPanel()">✕ 關閉</button>
+    </div>
+    <div class="panel-tabs">
+        <button class="panel-tab active" onclick="switchTab('sessions')" id="tab-sessions">場次記錄</button>
+        <button class="panel-tab" onclick="switchTab('stats')" id="tab-stats">統計</button>
+    </div>
+    <div class="panel-body" id="panelBody">
+        <div class="loading-msg">載入中…</div>
     </div>
 </div>
 
 <script>
-    const players = ["高玉川", "李中禕", "周樹偉", "詹偉凱", "戴志清"];
+    // ── Constants ──
+    const PLAYERS = ["高玉川", "李中禕", "周樹偉", "詹偉凱", "戴志清"];
+    const REPO = "douglee8793/21mj";
+    const HISTORY_FILE = "history.json";
+    const API_BASE = "https://api.github.com/repos/" + REPO + "/contents/" + HISTORY_FILE;
+
+    // ── Game state ──
     let idleIndex = 0;
     let seatIndices = [];
     let records = { hu: null, pao: null, zimo: null, flowerTarget: null };
     let history = [];
     let totalScores = {};
+    PLAYERS.forEach(p => totalScores[p] = 0);
 
-    players.forEach(p => totalScores[p] = 0);
+    // ── Panel state ──
+    let currentTab = 'sessions';
+    let historyData = null;
 
+    // ── Token ──
+    function getToken() { return localStorage.getItem('gh_token') || ''; }
+    function saveToken() {
+        const t = document.getElementById('tokenInput').value.trim();
+        if (t) localStorage.setItem('gh_token', t);
+        else localStorage.removeItem('gh_token');
+        closeTokenModal();
+        alert(t ? 'Token 已儲存！' : 'Token 已清除。');
+    }
+    function openTokenModal() {
+        document.getElementById('tokenInput').value = getToken();
+        document.getElementById('tokenModal').classList.add('open');
+    }
+    function closeTokenModal() { document.getElementById('tokenModal').classList.remove('open'); }
+
+    // ── GitHub API ──
+    async function fetchHistory() {
+        const res = await fetch(API_BASE + '?t=' + Date.now());
+        if (!res.ok) throw new Error('無法讀取歷史資料');
+        const json = await res.json();
+        const content = JSON.parse(atob(json.content.replace(/\n/g, '')));
+        return { data: content, sha: json.sha };
+    }
+
+    async function pushHistory(data, sha, message) {
+        const token = getToken();
+        if (!token) throw new Error('請先在 ⚙️ 設定中填入 GitHub Token');
+        const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+        const res = await fetch(API_BASE, {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'token ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message, content, sha })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.message || '儲存失敗');
+        }
+    }
+
+    // ── Save session ──
+    function openSaveModal() {
+        if (history.length === 0) return alert('本場尚未有任何紀錄');
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('sessionDate').value = today;
+        document.getElementById('sessionVenue').value = '';
+        // preview
+        const preview = PLAYERS.map(p => {
+            const s = totalScores[p];
+            const sign = s >= 0 ? '+' : '';
+            return `${p}：${sign}${s}`;
+        }).join('　');
+        document.getElementById('savePreview').textContent = preview;
+        document.getElementById('saveModal').classList.add('open');
+    }
+    function closeSaveModal() { document.getElementById('saveModal').classList.remove('open'); }
+
+    async function confirmSave() {
+        const date = document.getElementById('sessionDate').value;
+        const venue = document.getElementById('sessionVenue').value.trim();
+        if (!date) return alert('請填入日期');
+        if (!venue) return alert('請填入場地');
+
+        const btn = document.querySelector('#saveModal .btn-confirm-green');
+        btn.textContent = '儲存中…';
+        btn.disabled = true;
+
+        try {
+            const { data, sha } = await fetchHistory();
+            const session = {
+                id: date + '-' + Date.now(),
+                date,
+                venue,
+                rounds: history.length,
+                scores: { ...totalScores }
+            };
+            data.sessions.push(session);
+            await pushHistory(data, sha, `新增場次：${date} ${venue}`);
+            closeSaveModal();
+            alert('✅ 已成功儲存到歷史資料庫！');
+            historyData = null; // 清快取
+        } catch (e) {
+            alert('❌ 儲存失敗：' + e.message);
+        } finally {
+            btn.textContent = '確認儲存';
+            btn.disabled = false;
+        }
+    }
+
+    // ── History panel ──
+    async function openHistoryPanel() {
+        document.getElementById('panelOverlay').classList.add('open');
+        document.getElementById('historyPanel').classList.add('open');
+        await renderPanel();
+    }
+    function closeHistoryPanel() {
+        document.getElementById('panelOverlay').classList.remove('open');
+        document.getElementById('historyPanel').classList.remove('open');
+    }
+    function switchTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        renderPanel();
+    }
+
+    async function renderPanel() {
+        const body = document.getElementById('panelBody');
+        body.innerHTML = '<div class="loading-msg">載入中…</div>';
+        try {
+            if (!historyData) {
+                const { data } = await fetchHistory();
+                historyData = data;
+            }
+            if (currentTab === 'sessions') renderSessions(historyData.sessions);
+            else renderStats(historyData.sessions);
+        } catch (e) {
+            body.innerHTML = '<div class="loading-msg">⚠️ ' + e.message + '</div>';
+        }
+    }
+
+    function renderSessions(sessions) {
+        const body = document.getElementById('panelBody');
+        if (!sessions || sessions.length === 0) {
+            body.innerHTML = '<div class="loading-msg">尚無歷史場次</div>';
+            return;
+        }
+        const sorted = [...sessions].sort((a, b) => b.date.localeCompare(a.date));
+        body.innerHTML = sorted.map((s, i) => {
+            const winner = PLAYERS.reduce((a, b) => s.scores[a] > s.scores[b] ? a : b);
+            const rows = PLAYERS.map(p => {
+                const sc = s.scores[p] ?? 0;
+                const cls = sc >= 0 ? 'pos' : 'neg';
+                const sign = sc >= 0 ? '+' : '';
+                return `<tr><td>${p}</td><td class="${cls}">${sign}${sc}</td></tr>`;
+            }).join('');
+            return `
+            <div class="session-card">
+                <div class="session-head" onclick="toggleSession(${i})">
+                    <div>
+                        <div class="session-date">${s.date} &nbsp;<span class="session-venue">${s.venue}</span></div>
+                        <div style="font-size:12px;color:#888;margin-top:2px;">${s.rounds} 局</div>
+                    </div>
+                    <div class="session-winner">🏆 ${winner}</div>
+                </div>
+                <div class="session-detail" id="sd-${i}">
+                    <table class="session-scores"><tbody>${rows}</tbody></table>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function toggleSession(i) {
+        const el = document.getElementById('sd-' + i);
+        el.classList.toggle('open');
+    }
+
+    function renderStats(sessions) {
+        const body = document.getElementById('panelBody');
+        if (!sessions || sessions.length === 0) {
+            body.innerHTML = '<div class="loading-msg">尚無歷史場次</div>';
+            return;
+        }
+
+        // Cumulative totals
+        const totals = {};
+        const wins = {};
+        const played = {};
+        PLAYERS.forEach(p => { totals[p] = 0; wins[p] = 0; played[p] = 0; });
+
+        sessions.forEach(s => {
+            PLAYERS.forEach(p => {
+                if (s.scores[p] !== undefined) {
+                    totals[p] += s.scores[p];
+                    played[p]++;
+                }
+            });
+            const winner = PLAYERS.reduce((a, b) => (s.scores[a] ?? -Infinity) > (s.scores[b] ?? -Infinity) ? a : b);
+            wins[winner]++;
+        });
+
+        const sortedTotal = [...PLAYERS].sort((a, b) => totals[b] - totals[a]);
+
+        // Yearly breakdown
+        const byYear = {};
+        sessions.forEach(s => {
+            const yr = s.date.substring(0, 4);
+            if (!byYear[yr]) byYear[yr] = { count: 0, scores: {} };
+            byYear[yr].count++;
+            PLAYERS.forEach(p => {
+                byYear[yr].scores[p] = (byYear[yr].scores[p] || 0) + (s.scores[p] ?? 0);
+            });
+        });
+
+        const totalRows = sortedTotal.map(p => {
+            const sc = totals[p];
+            const cls = sc >= 0 ? 'pos' : 'neg';
+            const sign = sc >= 0 ? '+' : '';
+            const avg = played[p] ? Math.round(sc / played[p]) : 0;
+            const avgSign = avg >= 0 ? '+' : '';
+            return `<div class="stat-row">
+                <span class="stat-name">${p}</span>
+                <span>
+                    <span class="stat-val ${cls}">${sign}${sc}</span>
+                    <span style="font-size:11px;color:#999;margin-left:6px;">均${avgSign}${avg} / 勝${wins[p]}場</span>
+                </span>
+            </div>`;
+        }).join('');
+
+        const yearRows = Object.keys(byYear).sort().reverse().map(yr => {
+            const yd = byYear[yr];
+            const ywinner = PLAYERS.reduce((a, b) => yd.scores[a] > yd.scores[b] ? a : b);
+            return `<div class="stat-row">
+                <span class="stat-name">${yr}年（${yd.count}場）</span>
+                <span style="color:var(--green);font-weight:bold;">🏆 ${ywinner}</span>
+            </div>`;
+        }).join('');
+
+        body.innerHTML = `
+            <div class="stat-card">
+                <h4>累計總積分（共 ${sessions.length} 場）</h4>
+                ${totalRows}
+            </div>
+            <div class="stat-card">
+                <h4>年度冠軍</h4>
+                ${yearRows}
+            </div>`;
+    }
+
+    // ── Game logic ──
     function clampTai(input) {
         const winType = document.getElementById('winType').value;
         const min = winType == "1" ? 1 : 0;
@@ -268,15 +719,13 @@
 
     function init() {
         const idleSelect = document.getElementById('idleSelect');
-        players.forEach((name, i) => {
-            idleSelect.add(new Option(name, i));
-        });
+        PLAYERS.forEach((name, i) => idleSelect.add(new Option(name, i)));
         assignSeats();
     }
 
     function assignSeats() {
         idleIndex = parseInt(document.getElementById('idleSelect').value);
-        seatIndices = [0, 1, 2, 3, 4].filter(i => i !== idleIndex);
+        seatIndices = [0,1,2,3,4].filter(i => i !== idleIndex);
         resetSelections();
         renderPlayers();
     }
@@ -290,7 +739,7 @@
         const winType = document.getElementById('winType').value;
         const flowerEnabled = document.getElementById('flowerEnabled').checked;
         const dealerSection = document.getElementById('dealerSection');
-        
+
         dealerSection.style.display = winType == "1" ? "block" : "none";
 
         const taiInput = document.getElementById('taiCount');
@@ -300,17 +749,17 @@
         } else {
             taiInput.min = 0;
         }
-        
+
         const dSelect = document.getElementById('dealerSelect');
         dSelect.innerHTML = "";
-        seatIndices.forEach(idx => dSelect.add(new Option(players[idx], idx)));
+        seatIndices.forEach(idx => dSelect.add(new Option(PLAYERS[idx], idx)));
 
         grid.innerHTML = "";
         seatIndices.forEach(idx => {
             const card = document.createElement('div');
             card.className = 'player-card';
-            card.innerHTML = `<strong>${players[idx]}</strong>`;
-            
+            card.innerHTML = `<strong>${PLAYERS[idx]}</strong>`;
+
             const btnGroup = document.createElement('div');
             btnGroup.className = 'btn-group';
 
@@ -319,12 +768,12 @@
                 huBtn.className = `btn-role ${records.hu === idx ? 'selected-hu' : ''}`;
                 huBtn.innerText = "胡";
                 huBtn.onclick = () => setRole('hu', idx);
-                
+
                 const paoBtn = document.createElement('button');
                 paoBtn.className = `btn-role ${records.pao === idx ? 'selected-pao' : ''}`;
                 paoBtn.innerText = "炮";
                 paoBtn.onclick = () => setRole('pao', idx);
-                
+
                 btnGroup.appendChild(huBtn);
                 btnGroup.appendChild(paoBtn);
             } else {
@@ -373,76 +822,71 @@
         const tai = parseInt(document.getElementById('taiCount').value);
         if (winType == "0" && tai < 0) return alert("放炮台數不能是負數");
         if (winType == "1" && tai < 1) return alert("自摸台數最少需要 1 台");
-        
+
         let roundRes = {};
-        players.forEach(p => roundRes[p] = 0);
+        PLAYERS.forEach(p => roundRes[p] = 0);
         let confirmMsg = "";
 
         if (winType == "0") {
             if (records.hu === null || records.pao === null) return alert("請選胡家與放炮家");
             if (records.hu === records.pao) return alert("胡家與放炮家不可為同一人");
-            
-            let amount = base + tai * perTai;
-            roundRes[players[records.hu]] += amount;
-            roundRes[players[records.pao]] -= amount;
 
-            confirmMsg = `【放炮模式】\n胡家：${players[records.hu]} (+${amount})\n放炮：${players[records.pao]} (-${amount})`;
+            let amount = base + tai * perTai;
+            roundRes[PLAYERS[records.hu]] += amount;
+            roundRes[PLAYERS[records.pao]] -= amount;
+            confirmMsg = `【放炮模式】\n胡家：${PLAYERS[records.hu]} (+${amount})\n放炮：${PLAYERS[records.pao]} (-${amount})`;
 
             if (records.flowerTarget !== null) {
                 if (records.flowerTarget === records.pao) {
-                    roundRes[players[idleIndex]] -= base;
-                    roundRes[players[records.hu]] += base;
-                    confirmMsg += `\n插花(輸)：${players[idleIndex]} (-${base})`;
+                    roundRes[PLAYERS[idleIndex]] -= base;
+                    roundRes[PLAYERS[records.hu]] += base;
+                    confirmMsg += `\n插花(輸)：${PLAYERS[idleIndex]} (-${base})`;
                 } else if (records.flowerTarget === records.hu) {
-                    roundRes[players[idleIndex]] += base;
-                    roundRes[players[records.pao]] -= base;
-                    confirmMsg += `\n插花(贏)：${players[idleIndex]} (+${base})`;
+                    roundRes[PLAYERS[idleIndex]] += base;
+                    roundRes[PLAYERS[records.pao]] -= base;
+                    confirmMsg += `\n插花(贏)：${PLAYERS[idleIndex]} (+${base})`;
                 }
             }
         } else {
             if (records.zimo === null) return alert("請選自摸家");
             let dealerIdx = parseInt(document.getElementById('dealerSelect').value);
             let extraTaiCount = parseInt(document.getElementById('extraTai').value);
-            
             let baseWin = base + tai * perTai;
             let dealerAdd = extraTaiCount * perTai;
-
-            confirmMsg = `【自摸模式】\n自摸：${players[records.zimo]}\n總台數：${tai}\n莊家加台：${extraTaiCount}\n\n明細：`;
+            confirmMsg = `【自摸模式】\n自摸：${PLAYERS[records.zimo]}\n總台數：${tai}\n莊家加台：${extraTaiCount}\n\n明細：`;
 
             seatIndices.forEach(idx => {
                 if (idx === records.zimo) return;
                 let loss = baseWin;
                 if (records.zimo !== dealerIdx && idx === dealerIdx) loss += dealerAdd;
-                
-                roundRes[players[idx]] -= loss;
-                roundRes[players[records.zimo]] += loss;
-                confirmMsg += `\n${players[idx]}: -${loss}`;
+                roundRes[PLAYERS[idx]] -= loss;
+                roundRes[PLAYERS[records.zimo]] += loss;
+                confirmMsg += `\n${PLAYERS[idx]}: -${loss}`;
             });
 
             if (records.flowerTarget !== null) {
                 if (records.flowerTarget === records.zimo) {
                     seatIndices.forEach(idx => {
                         if (idx !== records.zimo) {
-                            roundRes[players[idx]] -= base;
-                            roundRes[players[idleIndex]] += base;
+                            roundRes[PLAYERS[idx]] -= base;
+                            roundRes[PLAYERS[idleIndex]] += base;
                         }
                     });
-                    confirmMsg += `\n插花(贏)：${players[idleIndex]} 贏三家共 +${base * 3}`;
+                    confirmMsg += `\n插花(贏)：${PLAYERS[idleIndex]} 贏三家共 +${base * 3}`;
                 } else {
-                    roundRes[players[idleIndex]] -= base;
-                    roundRes[players[records.zimo]] += base;
-                    confirmMsg += `\n插花(輸)：${players[idleIndex]} -${base}`;
+                    roundRes[PLAYERS[idleIndex]] -= base;
+                    roundRes[PLAYERS[records.zimo]] += base;
+                    confirmMsg += `\n插花(輸)：${PLAYERS[idleIndex]} -${base}`;
                 }
             }
         }
 
-        // 防呆確認
         if (!confirm(confirmMsg + "\n\n確定要增加這筆戰績嗎？")) return;
 
-        players.forEach(p => totalScores[p] += roundRes[p]);
-        history.push({ res: roundRes, cumu: {...totalScores} });
+        PLAYERS.forEach(p => totalScores[p] += roundRes[p]);
+        history.push({ res: roundRes, cumu: { ...totalScores } });
         updateTable();
-        
+
         if (winType == "0" && document.getElementById('autoRotate').checked) {
             document.getElementById('idleSelect').value = records.pao;
             assignSeats();
@@ -451,18 +895,25 @@
         resetSelections();
         document.getElementById('taiCount').value = 0;
         renderPlayers();
+
+        document.getElementById('saveSessionBtn').style.display = 'block';
         alert("紀錄成功！");
     }
 
     function updateTable() {
         const header = document.getElementById('tableHeader');
-        header.innerHTML = "<th>局</th>" + players.map(p => `<th>${p}</th>`).join("");
+        header.innerHTML = "<th>局</th>" + PLAYERS.map(p => `<th>${p}</th>`).join("");
 
         const body = document.getElementById('tableBody');
         body.innerHTML = history.map((h, i) => `
             <tr>
-                <td>${i+1}</td>
-                ${players.map(p => `<td>${h.cumu[p]}</td>`).join("")}
+                <td>${i + 1}</td>
+                ${PLAYERS.map(p => {
+                    const v = h.cumu[p];
+                    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+                    const sign = v > 0 ? '+' : '';
+                    return `<td class="${cls}">${sign}${v}</td>`;
+                }).join("")}
             </tr>
         `).join("");
     }
@@ -471,8 +922,9 @@
         if (history.length === 0) return;
         if (confirm("確定要刪除最後一局的紀錄嗎？此動作無法復原。")) {
             let last = history.pop();
-            players.forEach(p => totalScores[p] -= last.res[p]);
+            PLAYERS.forEach(p => totalScores[p] -= last.res[p]);
             updateTable();
+            if (history.length === 0) document.getElementById('saveSessionBtn').style.display = 'none';
             alert("已刪除最後一局。");
         }
     }
