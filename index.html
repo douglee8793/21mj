@@ -550,13 +550,17 @@
     }
 
     // ── Config (encrypted token in repo) ──
+    function b64Decode(b64) {
+        return JSON.parse(decodeURIComponent(escape(atob(b64.replace(/\n/g, '')))));
+    }
+
     let cachedConfig = null;
     async function fetchConfig() {
         if (cachedConfig) return cachedConfig;
         const res = await fetch(CONFIG_API + '?t=' + Date.now());
         if (!res.ok) throw new Error('無法讀取設定檔');
         const json = await res.json();
-        cachedConfig = { data: JSON.parse(atob(json.content.replace(/\n/g, ''))), sha: json.sha };
+        cachedConfig = { data: b64Decode(json.content), sha: json.sha };
         return cachedConfig;
     }
     async function pushConfig(data, sha, token) {
@@ -651,8 +655,7 @@
         const res = await fetch(API_BASE + '?t=' + Date.now());
         if (!res.ok) throw new Error('無法讀取歷史資料');
         const json = await res.json();
-        const content = JSON.parse(atob(json.content.replace(/\n/g, '')));
-        return { data: content, sha: json.sha };
+        return { data: b64Decode(json.content), sha: json.sha };
     }
 
     async function pushHistory(data, sha, message) {
