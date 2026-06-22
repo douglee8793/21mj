@@ -524,6 +524,7 @@
         return btoa(String.fromCharCode(...new Uint8Array(buf)));
     }
     async function deriveKey(password, salt) {
+        if (!crypto.subtle) throw new Error('請用 GitHub Pages 網址（https://）開啟，此功能需要 HTTPS');
         const enc = new TextEncoder();
         const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
         return crypto.subtle.deriveKey(
