@@ -231,7 +231,7 @@
     <div class="settings-grid" style="background: #e8f5e9;">
         <div class="control-group" style="grid-column: span 2;">
             <label>輸入台數 (自摸請輸入含自摸在內的總台數)</label>
-            <input type="number" id="taiCount" value="0" min="0" inputmode="numeric" oninput="clampTai(this)">
+            <input type="number" id="taiCount" value="0" min="0" inputmode="numeric" onblur="clampTai(this)">
         </div>
     </div>
 
