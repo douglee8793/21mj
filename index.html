@@ -526,7 +526,7 @@
         if (history.length === 0) return alert('本場尚未有任何紀錄');
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('sessionDate').value = today;
-        document.getElementById('sessionVenue').value = '';
+        document.getElementById('sessionVenue').value = '詹偉凱家';
         // preview
         const preview = PLAYERS.map(p => {
             const s = totalScores[p];
