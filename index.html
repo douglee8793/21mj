@@ -42,11 +42,20 @@
         .settings-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
+            gap: 12px;
             margin-bottom: 15px;
             background: #fff3e0;
             padding: 15px;
             border-radius: 10px;
+        }
+
+        @media (max-width: 480px) {
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
+            .toggle-group {
+                grid-column: span 1;
+            }
         }
 
         .control-group {
