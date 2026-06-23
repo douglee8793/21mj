@@ -804,10 +804,9 @@
                 if (s.scores[p] !== undefined) {
                     totals[p] += s.scores[p];
                     played[p]++;
+                    if (s.scores[p] >= 0) wins[p]++;
                 }
             });
-            const winner = PLAYERS.reduce((a, b) => (s.scores[a] ?? -Infinity) > (s.scores[b] ?? -Infinity) ? a : b);
-            wins[winner]++;
         });
 
         const sortedTotal = [...PLAYERS].sort((a, b) => totals[b] - totals[a]);
@@ -823,17 +822,19 @@
             });
         });
 
-        const totalRows = sortedTotal.map(p => {
+        const totalRows = sortedTotal.map((p, i) => {
             const sc = totals[p];
             const cls = sc >= 0 ? 'pos' : 'neg';
             const sign = sc >= 0 ? '+' : '';
             const avg = played[p] ? Math.round(sc / played[p]) : 0;
+            const avgCls = avg >= 0 ? 'pos' : 'neg';
             const avgSign = avg >= 0 ? '+' : '';
+            const rank = ['🥇','🥈','🥉'][i] || `${i+1}.`;
             return `<div class="stat-row">
-                <span class="stat-name">${p}</span>
-                <span>
-                    <span class="stat-val ${cls}">${sign}${sc}</span>
-                    <span style="font-size:11px;color:#999;margin-left:6px;">均${avgSign}${avg} / 勝${wins[p]}場</span>
+                <span class="stat-name">${rank} ${p}</span>
+                <span style="text-align:right;line-height:1.6">
+                    <span class="stat-val ${cls}">${sign}${sc}</span><br>
+                    <span style="font-size:12px;color:#aaa;">均 <span class="${avgCls}">${avgSign}${avg}</span> · 贏錢率 ${played[p] ? Math.round(wins[p]/played[p]*100) : 0}%（${wins[p]}/${played[p]}）</span>
                 </span>
             </div>`;
         }).join('');
