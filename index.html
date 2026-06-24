@@ -810,6 +810,7 @@
         });
 
         const sortedTotal = [...PLAYERS].sort((a, b) => totals[b] - totals[a]);
+        const totalRounds = sessions.reduce((sum, s) => sum + (s.rounds || 0), 0);
 
         // Yearly breakdown
         const byYear = {};
@@ -850,7 +851,7 @@
 
         body.innerHTML = `
             <div class="stat-card">
-                <h4>累計總積分（共 ${sessions.length} 場）</h4>
+                <h4>累計總積分（共 ${sessions.length} 場 / ${totalRounds} 局）</h4>
                 ${totalRows}
             </div>
             <div class="stat-card">
