@@ -985,19 +985,24 @@
             let amount = base + tai * perTai;
             roundRes[PLAYERS[records.hu]] += amount;
             roundRes[PLAYERS[records.pao]] -= amount;
-            confirmMsg = `【放炮模式】\n胡家：${PLAYERS[records.hu]} (+${amount})\n放炮：${PLAYERS[records.pao]} (-${amount})`;
 
+            let flowerMsg = '';
             if (records.flowerTarget !== null) {
                 if (records.flowerTarget === records.pao) {
                     roundRes[PLAYERS[idleIndex]] -= base;
                     roundRes[PLAYERS[records.hu]] += base;
-                    confirmMsg += `\n插花(輸)：${PLAYERS[idleIndex]} (-${base})`;
+                    flowerMsg = `\n插花(輸)：${PLAYERS[idleIndex]} (-${base})`;
                 } else if (records.flowerTarget === records.hu) {
                     roundRes[PLAYERS[idleIndex]] += base;
                     roundRes[PLAYERS[records.pao]] -= base;
-                    confirmMsg += `\n插花(贏)：${PLAYERS[idleIndex]} (+${base})`;
+                    flowerMsg = `\n插花(贏)：${PLAYERS[idleIndex]} (+${base})`;
                 }
             }
+
+            const huGain = roundRes[PLAYERS[records.hu]];
+            const paoLoss = -roundRes[PLAYERS[records.pao]];
+            confirmMsg = `【放炮模式】\n胡家：${PLAYERS[records.hu]} (+${huGain})\n放炮：${PLAYERS[records.pao]} (-${paoLoss})`;
+            confirmMsg += flowerMsg;
         } else {
             if (records.zimo === null) return alert("請選自摸家");
             let dealerIdx = parseInt(document.getElementById('dealerSelect').value);
