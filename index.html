@@ -1004,32 +1004,42 @@
             let extraTaiCount = parseInt(document.getElementById('extraTai').value);
             let baseWin = base + tai * perTai;
             let dealerAdd = extraTaiCount * perTai;
-            confirmMsg = `【自摸模式】\n自摸：${PLAYERS[records.zimo]}\n總台數：${tai}\n莊家加台：${extraTaiCount}\n\n明細：`;
 
+            // 先算各輸家損失，之後加上花牌再一起顯示
+            const playerLoss = {};
             seatIndices.forEach(idx => {
                 if (idx === records.zimo) return;
                 let loss = baseWin;
                 if (records.zimo !== dealerIdx && idx === dealerIdx) loss += dealerAdd;
                 roundRes[PLAYERS[idx]] -= loss;
                 roundRes[PLAYERS[records.zimo]] += loss;
-                confirmMsg += `\n${PLAYERS[idx]}: -${loss}`;
+                playerLoss[idx] = loss;
             });
 
+            let flowerMsg = '';
             if (records.flowerTarget !== null) {
                 if (records.flowerTarget === records.zimo) {
                     seatIndices.forEach(idx => {
                         if (idx !== records.zimo) {
                             roundRes[PLAYERS[idx]] -= base;
                             roundRes[PLAYERS[idleIndex]] += base;
+                            playerLoss[idx] += base;
                         }
                     });
-                    confirmMsg += `\n插花(贏)：${PLAYERS[idleIndex]} 贏三家共 +${base * 3}`;
+                    flowerMsg = `\n插花(贏)：${PLAYERS[idleIndex]} 贏三家共 +${base * 3}`;
                 } else {
                     roundRes[PLAYERS[idleIndex]] -= base;
                     roundRes[PLAYERS[records.zimo]] += base;
-                    confirmMsg += `\n插花(輸)：${PLAYERS[idleIndex]} -${base}`;
+                    flowerMsg = `\n插花(輸)：${PLAYERS[idleIndex]} -${base}`;
                 }
             }
+
+            confirmMsg = `【自摸模式】\n自摸：${PLAYERS[records.zimo]}\n總台數：${tai}\n莊家加台：${extraTaiCount}\n\n明細：`;
+            seatIndices.forEach(idx => {
+                if (idx !== records.zimo) confirmMsg += `\n${PLAYERS[idx]}: -${playerLoss[idx]}`;
+            });
+            confirmMsg += `\n${PLAYERS[records.zimo]}: +${roundRes[PLAYERS[records.zimo]]}`;
+            confirmMsg += flowerMsg;
         }
 
         if (!confirm(confirmMsg + "\n\n確定要增加這筆戰績嗎？")) return;
