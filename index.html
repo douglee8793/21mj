@@ -938,7 +938,7 @@
             if (flowerEnabled) {
                 const flowerBtn = document.createElement('button');
                 flowerBtn.className = `btn-flower ${records.flowerTarget === idx ? 'selected' : ''}`;
-                flowerBtn.innerText = "插花";
+                flowerBtn.innerText = "被插";
                 flowerBtn.onclick = () => setFlower(idx);
                 btnGroup.appendChild(flowerBtn);
             }
