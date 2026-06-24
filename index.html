@@ -173,6 +173,7 @@
         }
         th { background: var(--secondary); color: white; padding: 10px 5px; white-space: nowrap; }
         td { border: 1px solid #ddd; padding: 8px 4px; white-space: nowrap; }
+        .modal table { min-width: 0; }
         .pos { color: #2e7d32; font-weight: bold; }
         .neg { color: #c62828; font-weight: bold; }
 
@@ -676,12 +677,13 @@
         document.getElementById('sessionDate').value = today;
         document.getElementById('sessionVenue').value = '詹偉凱家';
         // preview
-        const preview = PLAYERS.map(p => {
+        const rows = PLAYERS.map(p => {
             const s = totalScores[p];
             const sign = s >= 0 ? '+' : '';
-            return `${p}：${sign}${s}`;
-        }).join('　');
-        document.getElementById('savePreview').textContent = preview;
+            const cls = s >= 0 ? 'pos' : 'neg';
+            return `<tr><td style="text-align:left;border:none;padding:4px 8px;">${p}</td><td class="${cls}" style="text-align:right;border:none;padding:4px 8px;">${sign}${s}</td></tr>`;
+        }).join('');
+        document.getElementById('savePreview').innerHTML = `<table style="width:100%;"><tbody>${rows}</tbody></table>`;
         document.getElementById('saveModal').classList.add('open');
     }
     function closeSaveModal() { document.getElementById('saveModal').classList.remove('open'); }
