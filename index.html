@@ -407,8 +407,9 @@
 
     <div id="playerGrid" class="player-grid"></div>
 
-    <button class="main-action" onclick="addRecord()">增加戰績</button>
+    <button class="main-action" id="mainActionBtn" onclick="addRecord()">增加戰績</button>
     <button class="save-session-btn" id="saveSessionBtn" onclick="openSaveModal()">💾 儲存本場紀錄到歷史資料庫</button>
+    <div id="syncStatus" style="font-size:12px;color:#888;margin-top:6px;clear:both;"></div>
 
     <div class="history-section">
         <h3>本場積分表</h3>
@@ -416,7 +417,7 @@
             <thead><tr id="tableHeader"></tr></thead>
             <tbody id="tableBody"></tbody>
         </table>
-        <button onclick="deleteLast()" style="color:red;background:none;text-decoration:underline;width:100%;margin-top:10px;">刪除最後一局</button>
+        <button id="deleteLastBtn" onclick="deleteLast()" style="color:red;background:none;text-decoration:underline;width:100%;margin-top:10px;">刪除最後一局</button>
     </div>
 </div>
 
@@ -436,6 +437,19 @@
         <div class="modal-btns">
             <button class="btn-cancel" onclick="closeSaveModal()">取消</button>
             <button class="btn-confirm-green" onclick="confirmSave()">確認儲存</button>
+        </div>
+    </div>
+</div>
+
+<!-- Resume Draft Modal -->
+<div class="modal-overlay" id="resumeModal">
+    <div class="modal">
+        <h3>🔄 偵測到未結算的場次</h3>
+        <div id="resumeSummary" style="font-size:14px;line-height:1.8;"></div>
+        <p class="token-note">若這是同一場比賽中斷，請選「繼續上一場」；若是新的一場，請選「開新場次」（會捨棄以上未結算資料，但不影響已存進歷史資料庫的紀錄）。</p>
+        <div class="modal-btns">
+            <button class="btn-cancel" onclick="discardDraft()">開新場次</button>
+            <button class="btn-confirm" onclick="continueDraft()">繼續上一場</button>
         </div>
     </div>
 </div>
@@ -517,6 +531,17 @@
     // ── Panel state ──
     let currentTab = 'sessions';
     let historyData = null;
+
+    // ── In-progress session draft (crash / device-switch recovery) ──
+    const DRAFT_FILE = "draft.json";
+    const DRAFT_API = "https://api.github.com/repos/" + REPO + "/contents/" + DRAFT_FILE;
+    const DRAFT_LS_KEY = "mj_draft";
+
+    let draftId = null;        // 這場比賽的唯一識別碼
+    let draftSha = null;       // 目前已知的雲端 draft.json 版本號
+    let draftSynced = false;   // 這個 draftId 是否已成功同步過雲端（用來判斷「被關閉/被取代」）
+    let draftLocked = false;   // 偵測到已在別台裝置結算完成，鎖定本機不可再記錄
+    let draftSyncing = false;  // 避免重疊的同步請求
 
     // ── Crypto helpers ──
     const CONFIG_API = "https://api.github.com/repos/" + REPO + "/contents/config.json";
@@ -673,6 +698,149 @@
         if (!res.ok) { const err = await res.json(); throw new Error(err.message || '儲存失敗'); }
     }
 
+    // ── Draft sync (local + cloud) ──
+    function generateDraftId() {
+        return 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    function currentSettings() {
+        return {
+            baseScore: document.getElementById('baseScore').value,
+            maxTai: document.getElementById('maxTai').value,
+            idleIndex,
+            winType: document.getElementById('winType').value,
+            autoRotate: document.getElementById('autoRotate').checked,
+            flowerEnabled: document.getElementById('flowerEnabled').checked
+        };
+    }
+
+    function buildDraftPayload() {
+        return {
+            draftId,
+            updatedAt: new Date().toISOString(),
+            settings: currentSettings(),
+            history,
+            totalScores
+        };
+    }
+
+    function saveDraftLocal() {
+        if (!draftId || history.length === 0) { localStorage.removeItem(DRAFT_LS_KEY); return; }
+        localStorage.setItem(DRAFT_LS_KEY, JSON.stringify(buildDraftPayload()));
+    }
+
+    function loadDraftLocal() {
+        try {
+            const raw = localStorage.getItem(DRAFT_LS_KEY);
+            if (!raw) return null;
+            const d = JSON.parse(raw);
+            if (!d || !d.history || d.history.length === 0) return null;
+            return d;
+        } catch { return null; }
+    }
+
+    function clearDraftLocal() { localStorage.removeItem(DRAFT_LS_KEY); }
+
+    async function fetchDraftCloud() {
+        const res = await fetch(DRAFT_API + '?t=' + Date.now());
+        if (res.status === 404) return { data: null, sha: null };
+        if (!res.ok) throw new Error('無法讀取雲端進度');
+        const json = await res.json();
+        return { data: b64Decode(json.content), sha: json.sha };
+    }
+
+    async function pushDraftCloud(payload, sha) {
+        const token = await getDecryptedToken();
+        const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+        const body = { message: '同步進行中場次 ' + payload.draftId, content };
+        if (sha) body.sha = sha;
+        const res = await fetch(DRAFT_API, {
+            method: 'PUT',
+            headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) { const err = await res.json(); throw new Error(err.message || '同步失敗'); }
+        const json = await res.json();
+        draftSha = json.content.sha;
+    }
+
+    async function deleteDraftCloudIfExists(token) {
+        try {
+            const cloud = await fetchDraftCloud();
+            if (!cloud.sha) return;
+            await fetch(DRAFT_API, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: '結算完成，清除進行中紀錄', sha: cloud.sha })
+            });
+        } catch { /* best effort，失敗不影響已完成的正式儲存 */ }
+    }
+
+    function updateSyncStatus(state) {
+        const el = document.getElementById('syncStatus');
+        if (!el) return;
+        const map = {
+            '': '',
+            local: '💾 已備份在本機（尚未連線同步，按 ⚙️ 輸入密碼可支援跨裝置接續）',
+            syncing: '☁️ 同步中…',
+            synced: '☁️ 已同步到雲端（' + new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) + '）',
+            error: '⚠️ 雲端同步失敗，本機備份正常，下一局會自動重試',
+            closed: '🔒 此場已在其他裝置完成結算，請重新整理頁面開始新場次'
+        };
+        el.textContent = map[state] ?? '';
+        el.style.color = state === 'synced' ? '#2e7d32' : (state === '' || state === 'local') ? '#888' : '#e65100';
+    }
+
+    function applyLockUI() {
+        const mainBtn = document.getElementById('mainActionBtn');
+        const delBtn = document.getElementById('deleteLastBtn');
+        if (draftLocked) {
+            mainBtn.disabled = true;
+            mainBtn.textContent = '🔒 已在其他裝置結算，請重新整理';
+            if (delBtn) delBtn.disabled = true;
+        } else {
+            mainBtn.disabled = false;
+            mainBtn.textContent = '增加戰績';
+            if (delBtn) delBtn.disabled = false;
+        }
+    }
+
+    // 同步目前草稿到雲端（背景執行，不阻塞畫面；未輸入過密碼時只做本機備份）
+    async function trySyncDraftCloud() {
+        if (!draftId || draftSyncing || draftLocked) return;
+        const cachedPassword = localStorage.getItem('mj_password');
+        if (!cachedPassword) { updateSyncStatus('local'); return; }
+
+        draftSyncing = true;
+        updateSyncStatus('syncing');
+        try {
+            const cloud = await fetchDraftCloud();
+
+            if (draftSynced && cloud.data === null) {
+                // 曾經同步過這個 draftId，但雲端檔案不見了 → 已被其他裝置結算並清除
+                draftLocked = true;
+                applyLockUI();
+                updateSyncStatus('closed');
+                return;
+            }
+            if (draftSynced && cloud.data && cloud.data.draftId !== draftId) {
+                // 曾經同步過，但雲端已變成別的場次（極少見的競爭情形）
+                draftLocked = true;
+                applyLockUI();
+                updateSyncStatus('closed');
+                return;
+            }
+
+            await pushDraftCloud(buildDraftPayload(), cloud.sha);
+            draftSynced = true;
+            updateSyncStatus('synced');
+        } catch (e) {
+            updateSyncStatus('error');
+        } finally {
+            draftSyncing = false;
+        }
+    }
+
     // ── Save session ──
     function openSaveModal() {
         if (history.length === 0) return alert('本場尚未有任何紀錄');
@@ -712,8 +880,25 @@
             };
             data.sessions.push(session);
             await pushHistory(data, sha, `新增場次：${date} ${venue}`);
+
+            // 正式結算完成：清除本機與雲端的進行中草稿，讓其他裝置知道這場已經 close
+            try {
+                const token = await getDecryptedToken();
+                await deleteDraftCloudIfExists(token);
+            } catch { /* best effort */ }
+            clearDraftLocal();
+
+            // 重置本場積分表，準備開始新的一場
+            history = [];
+            PLAYERS.forEach(p => totalScores[p] = 0);
+            draftId = null; draftSha = null; draftSynced = false; draftLocked = false;
+            updateTable();
+            applyLockUI();
+            updateSyncStatus('');
+            document.getElementById('saveSessionBtn').style.display = 'none';
+
             closeSaveModal();
-            alert('✅ 已成功儲存到歷史資料庫！');
+            alert('✅ 已成功儲存到歷史資料庫！本場積分表已重置，可以開始新的一場。');
             historyData = null; // 清快取
         } catch (e) {
             alert('❌ 儲存失敗：' + e.message);
@@ -972,6 +1157,7 @@
     }
 
     function addRecord() {
+        if (draftLocked) { alert('🔒 此場已在其他裝置完成結算，請重新整理頁面開始新場次。'); return; }
         const winType = document.getElementById('winType').value;
         const base = parseInt(document.getElementById('baseScore').value);
         const perTai = parseInt(document.getElementById('maxTai').value);
@@ -1068,6 +1254,11 @@
         renderPlayers();
 
         document.getElementById('saveSessionBtn').style.display = 'block';
+
+        if (!draftId) draftId = generateDraftId();
+        saveDraftLocal();
+        trySyncDraftCloud();
+
         alert("紀錄成功！");
     }
 
@@ -1090,14 +1281,138 @@
     }
 
     function deleteLast() {
+        if (draftLocked) { alert('🔒 此場已在其他裝置完成結算，請重新整理頁面開始新場次。'); return; }
         if (history.length === 0) return;
         if (confirm("確定要刪除最後一局的紀錄嗎？此動作無法復原。")) {
             let last = history.pop();
             PLAYERS.forEach(p => totalScores[p] -= last.res[p]);
             updateTable();
-            if (history.length === 0) document.getElementById('saveSessionBtn').style.display = 'none';
+            if (history.length === 0) {
+                document.getElementById('saveSessionBtn').style.display = 'none';
+                clearDraftLocal();
+                draftId = null; draftSha = null; draftSynced = false;
+                updateSyncStatus('');
+            } else {
+                saveDraftLocal();
+                trySyncDraftCloud();
+            }
             alert("已刪除最後一局。");
         }
+    }
+
+    // ── Draft resume flow ──
+    let pendingDraft = null; // { payload, source: 'cloud' | 'local' }
+
+    async function checkForDraft() {
+        const local = loadDraftLocal();
+        let cloud = null;
+        const cachedPassword = localStorage.getItem('mj_password');
+        if (cachedPassword) {
+            try {
+                const r = await fetchDraftCloud();
+                if (r.data && r.data.history && r.data.history.length > 0) cloud = r;
+            } catch { /* 離線或讀取失敗時，退回本機草稿 */ }
+        }
+
+        let candidate = null, source = null, sha = null;
+        if (cloud && local) {
+            if (new Date(cloud.data.updatedAt) >= new Date(local.updatedAt)) {
+                candidate = cloud.data; source = 'cloud'; sha = cloud.sha;
+            } else {
+                candidate = local; source = 'local';
+            }
+        } else if (cloud) {
+            candidate = cloud.data; source = 'cloud'; sha = cloud.sha;
+        } else if (local) {
+            candidate = local; source = 'local';
+        }
+
+        if (!candidate) return false;
+
+        pendingDraft = { payload: candidate, source, sha };
+        showResumeModal(candidate, source);
+        return true;
+    }
+
+    function showResumeModal(d, source) {
+        const t = new Date(d.updatedAt);
+        const timeStr = isNaN(t) ? (d.updatedAt || '未知') : t.toLocaleString('zh-TW');
+        const rows = PLAYERS.map(p => {
+            const s = (d.totalScores && d.totalScores[p]) || 0;
+            const cls = s >= 0 ? 'pos' : 'neg';
+            const sign = s >= 0 ? '+' : '';
+            return `<span style="margin-right:12px;">${p} <b class="${cls}">${sign}${s}</b></span>`;
+        }).join('');
+        document.getElementById('resumeSummary').innerHTML =
+            `最後更新：${timeStr}<br>已記錄：${d.history.length} 局<br>來源：${source === 'cloud' ? '☁️ 雲端（可能來自其他裝置）' : '💾 本機'}<br><br>${rows}`;
+        document.getElementById('resumeModal').classList.add('open');
+    }
+
+    function restoreDraft(d) {
+        draftId = d.draftId || generateDraftId();
+        history = d.history || [];
+        totalScores = {};
+        PLAYERS.forEach(p => totalScores[p] = (d.totalScores && d.totalScores[p]) || 0);
+
+        const s = d.settings || {};
+        if (s.baseScore !== undefined) document.getElementById('baseScore').value = s.baseScore;
+        if (s.maxTai !== undefined) document.getElementById('maxTai').value = s.maxTai;
+        if (s.winType !== undefined) document.getElementById('winType').value = s.winType;
+        if (s.autoRotate !== undefined) document.getElementById('autoRotate').checked = s.autoRotate;
+        if (s.flowerEnabled !== undefined) document.getElementById('flowerEnabled').checked = s.flowerEnabled;
+        if (s.idleIndex !== undefined) document.getElementById('idleSelect').value = s.idleIndex;
+
+        assignSeats();
+        updateTable();
+        document.getElementById('saveSessionBtn').style.display = history.length ? 'block' : 'none';
+        saveDraftLocal();
+    }
+
+    function continueDraft() {
+        document.getElementById('resumeModal').classList.remove('open');
+        if (!pendingDraft) { assignSeats(); return; }
+        const { payload, source, sha } = pendingDraft;
+        restoreDraft(payload);
+        draftSynced = (source === 'cloud');
+        draftSha = (source === 'cloud') ? sha : null;
+        draftLocked = false;
+        applyLockUI();
+        updateSyncStatus(source === 'cloud' ? 'synced' : 'local');
+        pendingDraft = null;
+    }
+
+    async function discardDraft() {
+        document.getElementById('resumeModal').classList.remove('open');
+        clearDraftLocal();
+        const p = pendingDraft;
+        pendingDraft = null;
+        draftId = null; draftSha = null; draftSynced = false; draftLocked = false;
+        applyLockUI();
+        updateSyncStatus('');
+        assignSeats();
+        // 盡量順手清掉雲端上的舊草稿（若沒有密碼可用就略過，之後新場次第一次同步時會自動覆蓋掉它）
+        if (p && p.source === 'cloud') {
+            const cachedPassword = localStorage.getItem('mj_password');
+            if (cachedPassword) {
+                try { const token = await getDecryptedToken(); await deleteDraftCloudIfExists(token); } catch { /* ignore */ }
+            }
+        }
+    }
+
+    // ── Leave-page warning：本場還有未儲存到歷史資料庫的紀錄時提醒 ──
+    window.addEventListener('beforeunload', function (e) {
+        if (history.length > 0) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    async function init() {
+        const idleSelect = document.getElementById('idleSelect');
+        PLAYERS.forEach((name, i) => idleSelect.add(new Option(name, i)));
+
+        const hasPendingDraft = await checkForDraft();
+        if (!hasPendingDraft) assignSeats();
     }
 
     init();
