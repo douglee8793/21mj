@@ -408,6 +408,11 @@
         </div>
     </div>
 
+    <div style="margin:12px 0;">
+        <button type="button" id="voiceBtn" onclick="toggleVoiceInput()" style="width:100%;padding:14px;background:#e91e63;color:white;border:none;border-radius:10px;font-size:16px;font-weight:bold;">🎤 語音輸入</button>
+        <div id="voiceStatus" style="margin-top:8px;font-size:13px;color:#666;min-height:18px;line-height:1.6;"></div>
+    </div>
+
     <div id="playerGrid" class="player-grid"></div>
 
     <button class="main-action" id="mainActionBtn" onclick="addRecord()">增加戰績</button>
@@ -1302,6 +1307,245 @@
                 trySyncDraftCloud();
             }
             alert("已刪除最後一局。");
+        }
+    }
+
+    // ── Voice input (Web Speech API + 中文規則式語意解析) ──
+    // 設計原則：語音只負責「自動幫你點按鈕、填台數」，不會直接送出戰績。
+    // 解析完會用既有的按鈕高亮 + 文字摘要讓使用者確認，最後仍要按「增加戰績」，
+    // 走原本 addRecord() 內建的 confirm() 二次確認，語音不會繞過任何既有的正確性檢查。
+
+    const CN_DIGITS = { '零': 0, '〇': 0, '一': 1, '二': 2, '兩': 2, '倆': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+
+    function cnNumberToInt(s) {
+        if (/^\d+$/.test(s)) return parseInt(s, 10);
+        if (s === '十') return 10;
+        const m = s.match(/^([一二兩三四五六七八九])?十([一二兩三四五六七八九])?$/);
+        if (m) {
+            const tens = m[1] ? CN_DIGITS[m[1]] : 1;
+            const units = m[2] ? CN_DIGITS[m[2]] : 0;
+            return tens * 10 + units;
+        }
+        if (CN_DIGITS[s] !== undefined) return CN_DIGITS[s];
+        return null;
+    }
+
+    // 把「三台」「二十三台」這類中文數字＋台，轉成阿拉伯數字＋台，方便後面統一用 /\d+台/ 抓取
+    function normalizeVoiceNumbers(text) {
+        return text.replace(/([一二兩三四五六七八九十]{1,3})(?=台)/g, (match) => {
+            const n = cnNumberToInt(match);
+            return n === null ? match : String(n);
+        });
+    }
+
+    function findPlayerMentions(text) {
+        const mentions = [];
+        PLAYERS.forEach((name, idx) => {
+            let from = 0, pos;
+            while ((pos = text.indexOf(name, from)) !== -1) {
+                mentions.push({ idx, pos, end: pos + name.length });
+                from = pos + name.length;
+            }
+        });
+        mentions.sort((a, b) => a.pos - b.pos);
+        return mentions;
+    }
+
+    function findKeywordPositions(text, variants) {
+        const positions = [];
+        variants.forEach(kw => {
+            let from = 0, pos;
+            while ((pos = text.indexOf(kw, from)) !== -1) { positions.push({ pos, len: kw.length }); from = pos + kw.length; }
+        });
+        return positions;
+    }
+
+    // 找關鍵字前後最近的玩家名字提及（「戴志清放炮」名字在前；「莊家是李中禕」名字在後）
+    function nearestMentionNearKeyword(mentions, keywordPos, keywordLen, maxGap) {
+        let best = null, bestDist = Infinity;
+        mentions.forEach(m => {
+            let dist = null;
+            if (m.pos >= keywordPos + keywordLen) dist = m.pos - (keywordPos + keywordLen);
+            else if (m.end <= keywordPos) dist = keywordPos - m.end;
+            if (dist !== null && dist <= maxGap && dist < bestDist) { bestDist = dist; best = m; }
+        });
+        return best;
+    }
+
+    function parseVoiceCommand(rawText) {
+        const text = normalizeVoiceNumbers(String(rawText || '').replace(/[，,。、\s]/g, ''));
+        const mentions = findPlayerMentions(text);
+        const result = {
+            mode: null, huIdx: null, paoIdx: null, zimoIdx: null,
+            dealerIdx: null, extraTai: null, tai: null, flowerIdx: null,
+            rawText, normalizedText: text, warnings: []
+        };
+
+        const isIdle = (idx) => idx === idleIndex;
+
+        const isZimo = /自摸/.test(text);
+        const paoKw = findKeywordPositions(text, ['放炮', '放跑', '放泡']);
+        const huKw = findKeywordPositions(text, ['胡', '糊']);
+
+        if (isZimo) {
+            result.mode = 'zimo';
+            const zimoKw = findKeywordPositions(text, ['自摸'])[0];
+            const zimoMention = nearestMentionNearKeyword(mentions, zimoKw.pos, zimoKw.len, 6);
+            if (zimoMention && !isIdle(zimoMention.idx)) result.zimoIdx = zimoMention.idx;
+            else result.warnings.push(zimoMention ? (PLAYERS[zimoMention.idx] + ' 目前是閒家，不能自摸') : '聽不出自摸的人是誰');
+
+            const dealerKw = findKeywordPositions(text, ['莊家'])[0];
+            if (dealerKw) {
+                const dealerMention = nearestMentionNearKeyword(mentions, dealerKw.pos, dealerKw.len, 6);
+                if (dealerMention && !isIdle(dealerMention.idx)) result.dealerIdx = dealerMention.idx;
+            }
+            const extraM = text.match(/加(\d+)台/);
+            if (extraM) result.extraTai = parseInt(extraM[1], 10);
+
+        } else if (paoKw.length && huKw.length) {
+            result.mode = 'pao';
+            const paoMention = nearestMentionNearKeyword(mentions, paoKw[0].pos, paoKw[0].len, 6);
+            const huMention = nearestMentionNearKeyword(mentions, huKw[0].pos, huKw[0].len, 6);
+            if (paoMention && !isIdle(paoMention.idx)) result.paoIdx = paoMention.idx;
+            else result.warnings.push(paoMention ? (PLAYERS[paoMention.idx] + ' 目前是閒家，不能放炮') : '聽不出放炮的人是誰');
+            if (huMention && !isIdle(huMention.idx)) result.huIdx = huMention.idx;
+            else result.warnings.push(huMention ? (PLAYERS[huMention.idx] + ' 目前是閒家，不能胡牌') : '聽不出胡牌的人是誰');
+            if (result.paoIdx !== null && result.huIdx !== null && result.paoIdx === result.huIdx) {
+                result.warnings.push('放炮跟胡牌辨識成同一人，請手動確認');
+                result.paoIdx = null; result.huIdx = null;
+            }
+        } else {
+            result.warnings.push('聽不出來是放炮還是自摸，請重講一次或改用按鈕輸入');
+        }
+
+        const taiM = text.match(/(\d+)台/);
+        if (taiM) result.tai = parseInt(taiM[1], 10);
+        else result.warnings.push('聽不出台數');
+
+        const flowerKw = findKeywordPositions(text, ['插花'])[0];
+        if (flowerKw) {
+            let best = null, bestDist = Infinity;
+            mentions.forEach(m => {
+                if (m.end <= flowerKw.pos) {
+                    const dist = flowerKw.pos - m.end;
+                    if (dist <= 6 && dist < bestDist) { bestDist = dist; best = m; }
+                }
+            });
+            if (!best) best = nearestMentionNearKeyword(mentions, flowerKw.pos, flowerKw.len, 6);
+            if (best && !isIdle(best.idx)) result.flowerIdx = best.idx;
+        }
+
+        return result;
+    }
+
+    function describeParsedResult(r) {
+        const parts = [];
+        if (r.mode === 'pao') {
+            parts.push('模式：放炮');
+            parts.push('胡家：' + (r.huIdx !== null ? PLAYERS[r.huIdx] : '？'));
+            parts.push('放炮：' + (r.paoIdx !== null ? PLAYERS[r.paoIdx] : '？'));
+        } else if (r.mode === 'zimo') {
+            parts.push('模式：自摸');
+            parts.push('自摸：' + (r.zimoIdx !== null ? PLAYERS[r.zimoIdx] : '？'));
+            if (r.dealerIdx !== null) parts.push('莊家：' + PLAYERS[r.dealerIdx]);
+            if (r.extraTai !== null) parts.push('莊家加台：' + r.extraTai);
+        } else {
+            parts.push('模式：無法判斷');
+        }
+        parts.push('台數：' + (r.tai !== null ? r.tai : '？'));
+        if (r.flowerIdx !== null) parts.push('插花：' + PLAYERS[r.flowerIdx]);
+        return parts.join('　');
+    }
+
+    // 把解析結果套用到畫面上（等同幫你把按鈕都點好），不會自動送出
+    function applyParsedResult(r) {
+        if (!r.mode) return false;
+
+        document.getElementById('winType').value = (r.mode === 'zimo') ? '1' : '0';
+        resetSelections();
+        renderPlayers(); // 先依新的勝負方式重建畫面結構（胡/炮 或 自摸按鈕、莊家欄位）
+
+        if (r.mode === 'pao') {
+            if (r.huIdx !== null) records.hu = r.huIdx;
+            if (r.paoIdx !== null) records.pao = r.paoIdx;
+        } else {
+            if (r.zimoIdx !== null) records.zimo = r.zimoIdx;
+        }
+        if (r.flowerIdx !== null) {
+            document.getElementById('flowerEnabled').checked = true;
+            records.flowerTarget = r.flowerIdx;
+        }
+
+        renderPlayers(); // 套用高亮 + 重建莊家下拉選單
+
+        // 這幾個欄位要在最後一次 renderPlayers() 之後設定，避免被上面重建下拉選單時蓋掉
+        if (r.tai !== null) document.getElementById('taiCount').value = r.tai;
+        if (r.mode === 'zimo') {
+            if (r.dealerIdx !== null) document.getElementById('dealerSelect').value = r.dealerIdx;
+            if (r.extraTai !== null) document.getElementById('extraTai').value = r.extraTai;
+        }
+
+        return true;
+    }
+
+    // ── 錄音控制 ──
+    let recognizer = null;
+    let voiceListening = false;
+
+    function getSpeechRecognitionCtor() {
+        return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+    }
+
+    function toggleVoiceInput() {
+        const statusEl = document.getElementById('voiceStatus');
+        const btn = document.getElementById('voiceBtn');
+        const Ctor = getSpeechRecognitionCtor();
+
+        if (!Ctor) {
+            statusEl.textContent = '⚠️ 這個瀏覽器不支援語音辨識（iPhone Safari 目前不支援），請改用手動按鈕，或用 Android/Chrome 測試。';
+            return;
+        }
+        if (voiceListening) { recognizer && recognizer.stop(); return; }
+
+        recognizer = new Ctor();
+        recognizer.lang = 'zh-TW';
+        recognizer.interimResults = false;
+        recognizer.maxAlternatives = 1;
+
+        voiceListening = true;
+        btn.textContent = '🎙️ 聆聽中…（再按一次停止）';
+        statusEl.textContent = '請說，例如：「戴志清放炮，李中禕胡，三台，詹偉凱插花」';
+
+        recognizer.onresult = function (e) {
+            const text = e.results[0][0].transcript;
+            const parsed = parseVoiceCommand(text);
+            const applied = applyParsedResult(parsed);
+            let msg = '🗣️ 辨識到：「' + text + '」<br>';
+            if (applied) {
+                msg += '→ ' + describeParsedResult(parsed);
+                if (parsed.warnings.length) {
+                    msg += '<br><span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
+                }
+                msg += '<br>請檢查下方按鈕選取是否正確，沒問題就按「增加戰績」。';
+            } else {
+                msg += '<span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
+            }
+            statusEl.innerHTML = msg;
+        };
+        recognizer.onerror = function (e) {
+            statusEl.textContent = '⚠️ 辨識失敗（' + e.error + '），請再試一次。';
+        };
+        recognizer.onend = function () {
+            voiceListening = false;
+            btn.textContent = '🎤 語音輸入';
+        };
+
+        try {
+            recognizer.start();
+        } catch (e) {
+            statusEl.textContent = '⚠️ 無法啟動麥克風：' + e.message;
+            voiceListening = false;
+            btn.textContent = '🎤 語音輸入';
         }
     }
 
