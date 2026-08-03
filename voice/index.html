@@ -498,6 +498,20 @@
             </div>
         </details>
 
+        <!-- Google Cloud Speech-to-Text（只在這台語音測試頁使用，準確度比瀏覽器內建辨識好很多） -->
+        <details class="setup-section" open>
+            <summary>🎤 Google 語音辨識設定（選填，準確度較高）</summary>
+            <div style="margin-top:12px;">
+                <div id="googleSttStatus" style="margin-bottom:10px;"></div>
+                <div class="control-group" style="margin-bottom:10px;">
+                    <label>Google Cloud Speech-to-Text API Key</label>
+                    <input type="password" id="googleSttKeyInput" placeholder="AIza...">
+                </div>
+                <p class="token-note">設定後語音輸入會改用 Google Cloud 辨識（準確度較好），只存在這台裝置的瀏覽器裡，不會上傳到 GitHub。清空後儲存可改回瀏覽器內建辨識。記得在 Google Cloud 後台把這組 Key 限制成只能從你的網域使用。</p>
+                <button class="btn-confirm" style="width:100%;margin-top:6px;" onclick="saveGoogleSttKey()">儲存 Google 設定</button>
+            </div>
+        </details>
+
         <div class="modal-btns">
             <button class="btn-cancel" onclick="closeTokenModal()">關閉</button>
             <button class="btn-confirm" onclick="verifyPassword()">驗證密碼</button>
@@ -625,6 +639,7 @@
         document.getElementById('adminToken').value = '';
         document.getElementById('adminPassword').value = '';
         document.getElementById('adminPassword2').value = '';
+        document.getElementById('googleSttKeyInput').value = '';
         const statusEl = document.getElementById('tokenStatus');
         try {
             const { data } = await fetchConfig();
@@ -633,6 +648,12 @@
                 ? '<span class="status-badge status-set">✅ 已設定加密 Token</span>'
                 : '<span class="status-badge status-unset">⚠️ 尚未設定 Token</span>';
         } catch { statusEl.innerHTML = ''; }
+
+        const googleStatusEl = document.getElementById('googleSttStatus');
+        const hasGoogleKey = !!getGoogleSttKey();
+        googleStatusEl.innerHTML = hasGoogleKey
+            ? '<span class="status-badge status-set">✅ 已設定，語音辨識使用 Google Cloud</span>'
+            : '<span class="status-badge status-unset">⚠️ 尚未設定，語音辨識使用瀏覽器內建</span>';
     }
     function closeTokenModal() { document.getElementById('tokenModal').classList.remove('open'); }
 
@@ -1580,15 +1601,153 @@
         return true;
     }
 
-    // ── 錄音控制 ──
+    // ── Google Cloud Speech-to-Text（選填，準確度比瀏覽器內建辨識好很多） ──
+    const GOOGLE_STT_KEY_LS = 'mj_google_stt_key';
+
+    function getGoogleSttKey() {
+        return (localStorage.getItem(GOOGLE_STT_KEY_LS) || '').trim();
+    }
+
+    function saveGoogleSttKey() {
+        const key = document.getElementById('googleSttKeyInput').value.trim();
+        if (!key) {
+            localStorage.removeItem(GOOGLE_STT_KEY_LS);
+            alert('已清除，語音輸入會改回瀏覽器內建辨識。');
+        } else {
+            localStorage.setItem(GOOGLE_STT_KEY_LS, key);
+            alert('✅ 已儲存，語音輸入會改用 Google Cloud 辨識（只存在這台裝置）。');
+        }
+        openTokenModal();
+    }
+
+    function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(String(reader.result).split(',')[1] || '');
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    // 加上玩家姓名跟麻將關鍵字當作 speechContexts 提示，讓 Google 引擎優先往這些詞猜，
+    // 這是解決「罕見人名辨識不準」最直接的做法，比純靠事後文字校正可靠。
+    async function recognizeWithGoogle(audioBlob) {
+        const key = getGoogleSttKey();
+        const base64 = await blobToBase64(audioBlob);
+        const body = {
+            config: {
+                encoding: 'WEBM_OPUS',
+                languageCode: 'zh-TW',
+                model: 'command_and_search',
+                speechContexts: [{
+                    phrases: [...PLAYERS, '放炮', '自摸', '插花', '莊家', '加台', '一台', '兩台', '三台', '四台', '五台'],
+                    boost: 15
+                }]
+            },
+            audio: { content: base64 }
+        };
+        const res = await fetch('https://speech.googleapis.com/v1/speech:recognize?key=' + encodeURIComponent(key), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error((err.error && err.error.message) || ('Google 語音辨識失敗（HTTP ' + res.status + '）'));
+        }
+        const data = await res.json();
+        if (!data.results || !data.results.length) throw new Error('沒有辨識到任何內容，請靠近麥克風重講一次');
+        return data.results.map(r => r.alternatives[0].transcript).join('');
+    }
+
+    // ── 把辨識到的文字餵給解析器並套用到畫面（不論來源是瀏覽器內建還是 Google，都走同一套流程）──
+    function handleRecognizedText(text) {
+        const statusEl = document.getElementById('voiceStatus');
+        const parsed = parseVoiceCommand(text);
+        const applied = applyParsedResult(parsed);
+        let msg = '🗣️ 辨識到：「' + text + '」<br>';
+        if (applied) {
+            msg += '→ ' + describeParsedResult(parsed);
+            if (parsed.warnings.length) {
+                msg += '<br><span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
+            }
+            msg += '<br>請檢查下方按鈕選取是否正確，沒問題就按「增加戰績」。';
+        } else {
+            msg += '<span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
+        }
+        statusEl.innerHTML = msg;
+    }
+
+    // ── 錄音控制：依有沒有設定 Google API Key，分成兩條路 ──
     let recognizer = null;
     let voiceListening = false;
+    let googleRecorder = null;
+    let googleAudioChunks = [];
+    let googleMediaStream = null;
+    let googleRecording = false;
 
     function getSpeechRecognitionCtor() {
         return window.SpeechRecognition || window.webkitSpeechRecognition || null;
     }
 
     function toggleVoiceInput() {
+        return getGoogleSttKey() ? toggleGoogleVoiceInput() : toggleBrowserVoiceInput();
+    }
+
+    // 方案 A：Google Cloud STT（按一次開始錄音，再按一次結束並送出辨識）
+    async function toggleGoogleVoiceInput() {
+        const statusEl = document.getElementById('voiceStatus');
+        const btn = document.getElementById('voiceBtn');
+
+        if (googleRecording) {
+            btn.disabled = true;
+            btn.textContent = '⏳ 辨識中…';
+            statusEl.textContent = '辨識中，請稍候…';
+            try {
+                const blob = await new Promise((resolve, reject) => {
+                    googleRecorder.onstop = () => {
+                        googleMediaStream.getTracks().forEach(t => t.stop());
+                        resolve(new Blob(googleAudioChunks, { type: 'audio/webm' }));
+                    };
+                    googleRecorder.onerror = reject;
+                    googleRecorder.stop();
+                });
+                googleRecording = false;
+                const text = await recognizeWithGoogle(blob);
+                handleRecognizedText(text);
+            } catch (e) {
+                statusEl.textContent = '⚠️ Google 辨識失敗：' + e.message;
+                googleRecording = false;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🎤 語音輸入（Google）';
+            }
+            return;
+        }
+
+        if (!navigator.mediaDevices || !window.MediaRecorder) {
+            statusEl.textContent = '⚠️ 這個瀏覽器不支援錄音功能，請改用 Chrome。';
+            return;
+        }
+        try {
+            googleMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e) {
+            statusEl.textContent = '⚠️ 無法取得麥克風權限：' + e.message;
+            return;
+        }
+        googleAudioChunks = [];
+        const mimeType = (window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm;codecs=opus'))
+            ? 'audio/webm;codecs=opus' : 'audio/webm';
+        googleRecorder = new MediaRecorder(googleMediaStream, { mimeType });
+        googleRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) googleAudioChunks.push(e.data); };
+        googleRecorder.start();
+        googleRecording = true;
+        btn.textContent = '🔴 錄音中…（再按一次結束並辨識）';
+        statusEl.textContent = '請說，例如：「戴志清放炮，李中禕胡，三台，詹偉凱插花」，說完按一次「結束」';
+    }
+
+    // 方案 B：瀏覽器內建 SpeechRecognition（沒有設定 Google API Key 時使用）
+    function toggleBrowserVoiceInput() {
         const statusEl = document.getElementById('voiceStatus');
         const btn = document.getElementById('voiceBtn');
         const Ctor = getSpeechRecognitionCtor();
@@ -1609,20 +1768,7 @@
         statusEl.textContent = '請說，例如：「戴志清放炮，李中禕胡，三台，詹偉凱插花」';
 
         recognizer.onresult = function (e) {
-            const text = e.results[0][0].transcript;
-            const parsed = parseVoiceCommand(text);
-            const applied = applyParsedResult(parsed);
-            let msg = '🗣️ 辨識到：「' + text + '」<br>';
-            if (applied) {
-                msg += '→ ' + describeParsedResult(parsed);
-                if (parsed.warnings.length) {
-                    msg += '<br><span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
-                }
-                msg += '<br>請檢查下方按鈕選取是否正確，沒問題就按「增加戰績」。';
-            } else {
-                msg += '<span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
-            }
-            statusEl.innerHTML = msg;
+            handleRecognizedText(e.results[0][0].transcript);
         };
         recognizer.onerror = function (e) {
             statusEl.textContent = '⚠️ 辨識失敗（' + e.error + '），請再試一次。';
@@ -1751,6 +1897,8 @@
     async function init() {
         const idleSelect = document.getElementById('idleSelect');
         PLAYERS.forEach((name, i) => idleSelect.add(new Option(name, i)));
+
+        if (getGoogleSttKey()) document.getElementById('voiceBtn').textContent = '🎤 語音輸入（Google）';
 
         const hasPendingDraft = await checkForDraft();
         if (!hasPendingDraft) assignSeats();
