@@ -1314,6 +1314,12 @@
     // 設計原則：語音只負責「自動幫你點按鈕、填台數」，不會直接送出戰績。
     // 解析完會用既有的按鈕高亮 + 文字摘要讓使用者確認，最後仍要按「增加戰績」，
     // 走原本 addRecord() 內建的 confirm() 二次確認，語音不會繞過任何既有的正確性檢查。
+    //
+    // 實測發現 Windows Chrome 的中文語音辨識對「人名」這種罕見專有名詞很不準，
+    // 常見錯法：同音字誤植（胡→湖）、整段名字被辨識成完全不同但發音相近的常用詞
+    // （周樹偉→咒術回、李中禕→李宗益）。因此除了精確比對，還加了一層「拼音容錯比對」
+    // 當精確比對找不到人名時，會在關鍵字附近抓可能的三字片段，逐字比對拼音是否相近
+    // （允許 1/3 字不同），只要 2/3 字對得上就當作是那位玩家。
 
     const CN_DIGITS = { '零': 0, '〇': 0, '一': 1, '二': 2, '兩': 2, '倆': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
 
@@ -1372,6 +1378,68 @@
         return best;
     }
 
+    // 只收錄玩家全名的字＋實測／常見同音或形近的誤聽字，拼音不含聲調（聲調是辨識最容易出錯的部分）
+    const PINYIN_MAP = {
+        '高': 'gao', '玉': 'yu', '川': 'chuan',
+        '李': 'li', '中': 'zhong', '禕': 'yi',
+        '周': 'zhou', '樹': 'shu', '偉': 'wei',
+        '詹': 'zhan', '凱': 'kai',
+        '戴': 'dai', '志': 'zhi', '清': 'qing',
+        // 常見誤聽字（依實測與常見同音字補充，之後可再擴充）
+        '宗': 'zong', '益': 'yi', '忠': 'zhong', '宜': 'yi', '怡': 'yi',
+        '咒': 'zhou', '州': 'zhou', '術': 'shu', '述': 'shu', '為': 'wei', '位': 'wei',
+        '湖': 'hu', '糊': 'hu', '呼': 'hu',
+        '瞻': 'zhan', '愷': 'kai', '代': 'dai', '帶': 'dai', '智': 'zhi', '青': 'qing'
+    };
+
+    function levenshtein(a, b) {
+        if (a === b) return 0;
+        const m = a.length, n = b.length;
+        const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+        for (let i = 0; i <= m; i++) dp[i][0] = i;
+        for (let j = 0; j <= n; j++) dp[0][j] = j;
+        for (let i = 1; i <= m; i++) {
+            for (let j = 1; j <= n; j++) {
+                dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1]
+                    : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+            }
+        }
+        return dp[m][n];
+    }
+
+    function charSimilar(a, b) {
+        if (a === b) return true;
+        const pa = PINYIN_MAP[a], pb = PINYIN_MAP[b];
+        if (!pa || !pb) return false;
+        return levenshtein(pa, pb) <= 1;
+    }
+
+    // 精確比對失敗時的備援：在指定範圍（[fromPos, toPos)）內找拼音最接近某玩家全名的片段
+    // excludeIdx 用來避免同一段誤聽文字被重複配對成兩個不同角色（例如胡跟放炮抓成同一人）
+    function fuzzyFindPlayerNear(text, fromPos, toPos, excludeIdx) {
+        const start = Math.max(0, fromPos), end = Math.min(text.length, toPos);
+        const window = text.slice(start, end);
+        let best = null, bestScore = 0;
+        PLAYERS.forEach((name, idx) => {
+            if (idx === excludeIdx) return;
+            for (let i = 0; i <= window.length - name.length; i++) {
+                const chunk = window.slice(i, i + name.length);
+                let matches = 0;
+                for (let k = 0; k < name.length; k++) if (charSimilar(chunk[k], name[k])) matches++;
+                const score = matches / name.length;
+                if (score >= 0.66 && score > bestScore) { bestScore = score; best = { idx, chunk, score, fuzzy: true }; }
+            }
+        });
+        return best;
+    }
+
+    // 依序：精確比對關鍵字附近 → 找不到就拼音容錯比對同一範圍
+    function findRoleMention(text, mentions, keywordPos, keywordLen, maxGap, excludeIdx) {
+        const exact = nearestMentionNearKeyword(mentions, keywordPos, keywordLen, maxGap);
+        if (exact && exact.idx !== excludeIdx) return exact;
+        return fuzzyFindPlayerNear(text, keywordPos - maxGap, keywordPos + keywordLen + maxGap, excludeIdx);
+    }
+
     function parseVoiceCommand(rawText) {
         const text = normalizeVoiceNumbers(String(rawText || '').replace(/[，,。、\s]/g, ''));
         const mentions = findPlayerMentions(text);
@@ -1385,31 +1453,44 @@
 
         const isZimo = /自摸/.test(text);
         const paoKw = findKeywordPositions(text, ['放炮', '放跑', '放泡']);
-        const huKw = findKeywordPositions(text, ['胡', '糊']);
+        // 「胡」很容易被聽成「湖」「呼」，這裡把常見同音字也當關鍵字看待
+        const huKw = findKeywordPositions(text, ['胡', '糊', '湖', '呼']);
 
         if (isZimo) {
             result.mode = 'zimo';
             const zimoKw = findKeywordPositions(text, ['自摸'])[0];
-            const zimoMention = nearestMentionNearKeyword(mentions, zimoKw.pos, zimoKw.len, 6);
+            const zimoMention = findRoleMention(text, mentions, zimoKw.pos, zimoKw.len, 6, null);
             if (zimoMention && !isIdle(zimoMention.idx)) result.zimoIdx = zimoMention.idx;
             else result.warnings.push(zimoMention ? (PLAYERS[zimoMention.idx] + ' 目前是閒家，不能自摸') : '聽不出自摸的人是誰');
 
             const dealerKw = findKeywordPositions(text, ['莊家'])[0];
             if (dealerKw) {
-                const dealerMention = nearestMentionNearKeyword(mentions, dealerKw.pos, dealerKw.len, 6);
+                const dealerMention = findRoleMention(text, mentions, dealerKw.pos, dealerKw.len, 6, null);
                 if (dealerMention && !isIdle(dealerMention.idx)) result.dealerIdx = dealerMention.idx;
             }
             const extraM = text.match(/加(\d+)台/);
             if (extraM) result.extraTai = parseInt(extraM[1], 10);
 
-        } else if (paoKw.length && huKw.length) {
+        } else if (huKw.length) {
+            // 只要求聽到「胡」；「放炮」是加分項，沒講的話改用語序判斷
+            // （「李中禕胡周樹偉三台」＝ 胡後面緊接的那個名字就是放炮的人）
             result.mode = 'pao';
-            const paoMention = nearestMentionNearKeyword(mentions, paoKw[0].pos, paoKw[0].len, 6);
-            const huMention = nearestMentionNearKeyword(mentions, huKw[0].pos, huKw[0].len, 6);
-            if (paoMention && !isIdle(paoMention.idx)) result.paoIdx = paoMention.idx;
-            else result.warnings.push(paoMention ? (PLAYERS[paoMention.idx] + ' 目前是閒家，不能放炮') : '聽不出放炮的人是誰');
+
+            const huMention = findRoleMention(text, mentions, huKw[0].pos, huKw[0].len, 6, null);
             if (huMention && !isIdle(huMention.idx)) result.huIdx = huMention.idx;
             else result.warnings.push(huMention ? (PLAYERS[huMention.idx] + ' 目前是閒家，不能胡牌') : '聽不出胡牌的人是誰');
+
+            let paoMention = null;
+            if (paoKw.length) {
+                paoMention = findRoleMention(text, mentions, paoKw[0].pos, paoKw[0].len, 6, result.huIdx);
+            } else {
+                const afterPos = huKw[0].pos + huKw[0].len;
+                const afterExact = mentions.find(m => m.pos >= afterPos && m.idx !== result.huIdx);
+                paoMention = afterExact || fuzzyFindPlayerNear(text, afterPos, afterPos + 6, result.huIdx);
+            }
+            if (paoMention && !isIdle(paoMention.idx)) result.paoIdx = paoMention.idx;
+            else result.warnings.push(paoMention ? (PLAYERS[paoMention.idx] + ' 目前是閒家，不能放炮') : '聽不出放炮的人是誰');
+
             if (result.paoIdx !== null && result.huIdx !== null && result.paoIdx === result.huIdx) {
                 result.warnings.push('放炮跟胡牌辨識成同一人，請手動確認');
                 result.paoIdx = null; result.huIdx = null;
@@ -1424,14 +1505,14 @@
 
         const flowerKw = findKeywordPositions(text, ['插花'])[0];
         if (flowerKw) {
-            let best = null, bestDist = Infinity;
+            let bestBefore = null, bestDist = Infinity;
             mentions.forEach(m => {
                 if (m.end <= flowerKw.pos) {
                     const dist = flowerKw.pos - m.end;
-                    if (dist <= 6 && dist < bestDist) { bestDist = dist; best = m; }
+                    if (dist <= 6 && dist < bestDist) { bestDist = dist; bestBefore = m; }
                 }
             });
-            if (!best) best = nearestMentionNearKeyword(mentions, flowerKw.pos, flowerKw.len, 6);
+            const best = bestBefore || findRoleMention(text, mentions, flowerKw.pos, flowerKw.len, 6, null);
             if (best && !isIdle(best.idx)) result.flowerIdx = best.idx;
         }
 
