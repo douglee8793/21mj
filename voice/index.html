@@ -1494,14 +1494,16 @@
 
         const isIdle = (idx) => idx === idleIndex;
 
-        const isZimo = /自摸/.test(text);
+        // 「自」很容易被聽成發音相近的「次」，或同音的「字」
+        const zimoKwList = findKeywordPositions(text, ['自摸', '次摸', '字摸']);
+        const isZimo = zimoKwList.length > 0;
         const paoKw = findKeywordPositions(text, ['放炮', '放跑', '放泡']);
         // 「胡」很容易被聽成「湖」「呼」，這裡把常見同音字也當關鍵字看待
         const huKw = findKeywordPositions(text, ['胡', '糊', '湖', '呼']);
 
         if (isZimo) {
             result.mode = 'zimo';
-            const zimoKw = findKeywordPositions(text, ['自摸'])[0];
+            const zimoKw = zimoKwList[0];
             const zimoMention = findNearestPlayer(text, mentions, zimoKw.pos, zimoKw.len, 6, null, null);
             if (zimoMention && !isIdle(zimoMention.idx)) result.zimoIdx = zimoMention.idx;
             else result.warnings.push(zimoMention ? (PLAYERS[zimoMention.idx] + ' 目前是閒家，不能自摸') : '聽不出自摸的人是誰');
