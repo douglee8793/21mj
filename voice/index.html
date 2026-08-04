@@ -1517,22 +1517,26 @@
             const extraM = text.match(/[加家](\d+)台/);
             if (extraM) result.extraTai = parseInt(extraM[1], 10);
 
-        } else if (huKw.length) {
-            // 只要求聽到「胡」；「放炮」是加分項，沒講的話改用語序判斷
-            // （「李中禕胡周樹偉三台」＝ 胡後面緊接的那個名字就是放炮的人）
+        } else if (huKw.length || paoKw.length) {
+            // 「胡」跟「放炮」只要聽到任一個關鍵字就能判斷是放炮模式；另一個沒講/沒聽到的話，
+            // 改用語序判斷——「放炮」跟「胡」通常緊鄰著各自對應的名字，且順序固定是
+            // 「放炮的人…放炮，胡的人…胡」，所以找不到的那個關鍵字，就往已知關鍵字後面找名字。
             result.mode = 'pao';
 
-            const huMention = findNearestPlayer(text, mentions, huKw[0].pos, huKw[0].len, 6, null, null);
+            let huMention = huKw.length ? findNearestPlayer(text, mentions, huKw[0].pos, huKw[0].len, 6, null, null) : null;
+            let paoMention = paoKw.length ? findNearestPlayer(text, mentions, paoKw[0].pos, paoKw[0].len, 6, huMention ? huMention.idx : null, null) : null;
+
+            if (!huMention && paoKw.length) {
+                // 沒聽到「胡」：胡家的名字通常講在「放炮」後面
+                huMention = findNearestPlayer(text, mentions, paoKw[0].pos, paoKw[0].len, 6, paoMention ? paoMention.idx : null, 'after');
+            }
+            if (!paoMention && huKw.length) {
+                // 沒聽到「放炮」：放炮的人通常講在「胡」後面
+                paoMention = findNearestPlayer(text, mentions, huKw[0].pos, huKw[0].len, 6, huMention ? huMention.idx : null, 'after');
+            }
+
             if (huMention && !isIdle(huMention.idx)) result.huIdx = huMention.idx;
             else result.warnings.push(huMention ? (PLAYERS[huMention.idx] + ' 目前是閒家，不能胡牌') : '聽不出胡牌的人是誰');
-
-            let paoMention = null;
-            if (paoKw.length) {
-                paoMention = findNearestPlayer(text, mentions, paoKw[0].pos, paoKw[0].len, 6, result.huIdx, null);
-            } else {
-                // 沒講「放炮」：只找「胡」後面的人（語序判斷），不能往前找，否則可能又抓回胡家自己
-                paoMention = findNearestPlayer(text, mentions, huKw[0].pos, huKw[0].len, 6, result.huIdx, 'after');
-            }
             if (paoMention && !isIdle(paoMention.idx)) result.paoIdx = paoMention.idx;
             else result.warnings.push(paoMention ? (PLAYERS[paoMention.idx] + ' 目前是閒家，不能放炮') : '聽不出放炮的人是誰');
 
