@@ -1544,7 +1544,9 @@
             if (zimoMention && !isIdle(zimoMention.idx)) result.zimoIdx = zimoMention.idx;
             else result.warnings.push(zimoMention ? (PLAYERS[zimoMention.idx] + ' 目前是閒家，不能自摸') : '聽不出自摸的人是誰');
 
-            const dealerKw = findKeywordPositions(text, ['莊家'])[0];
+            // 「莊家」跟「胡/放炮/自摸」同樣用拼音容錯比對（例如「專家」常被誤聽成「莊家」，
+            // zhuan/zhuang 拼音距離只差1），是2個字的目標，誤觸發風險跟放炮/自摸一樣低
+            const dealerKw = findFuzzyKeywordPositions(text, '莊家')[0];
             if (dealerKw) {
                 // 排除自摸家本人，避免精確比對抓不到莊家（例如莊家名字被聽錯）時，
                 // 誤把離「莊家」最近的精確提及（其實是自摸家自己）當成莊家
