@@ -1442,6 +1442,29 @@
         return positions;
     }
 
+    // 「胡」只有一個字，不能直接套用上面通用的「拼音距離<=1」規則：實測發現像「樹」(shu)
+    // 這種完全不相干的字，拼音距離到「胡」(hu) 也只有1（刪掉s而已），會被誤判成「胡」，
+    // 導致像「週樹偉放炮女中衣服四台」這種句子，「樹」被誤認成胡的關鍵字，整句配對整個配錯。
+    // 兩個字以上的目標（放炮、自摸、人名）風險低很多，因為要好幾個字同時剛好都對到才會誤判，
+    // 但單一個字風險太高，所以「胡」改成更嚴格的規則：拼音完全相同（糊/湖/呼），或是拼音長度
+    // 一樣、只有聲母不同、而且剛好是已知容易混淆的聲母組合（目前只有 h/f，是「禕胡」被聽成
+    // 「衣服」這個實測案例驗證過的）。
+    const HU_CONFUSABLE_INITIALS = ['f']; // 聲母容易跟 h 混淆的字，目前只有 f（例：服）
+    function isHuLike(ch) {
+        if (ch === '胡') return true;
+        const p = pinyinOf(ch);
+        if (!p) return false;
+        if (p === 'hu') return true;
+        return p.length === 2 && p[1] === 'u' && HU_CONFUSABLE_INITIALS.includes(p[0]);
+    }
+    function findHuKeywordPositions(text) {
+        const positions = [];
+        for (let i = 0; i < text.length; i++) {
+            if (isHuLike(text[i])) positions.push({ pos: i, len: 1 });
+        }
+        return positions;
+    }
+
     // 統一在關鍵字附近找玩家：把「精確比對」跟「拼音容錯比對」兩種候選放在同一個池子裡，
     // 一律用「離關鍵字的字元距離」決定最終選誰，距離相同才用比對品質（精確1.0 > 容錯0.66~1.0）當 tie-breaker。
     //
@@ -1507,7 +1530,7 @@
         const zimoKwList = findFuzzyKeywordPositions(text, '自摸');
         const isZimo = zimoKwList.length > 0;
         const paoKw = findFuzzyKeywordPositions(text, '放炮');
-        const huKw = findFuzzyKeywordPositions(text, '胡');
+        const huKw = findHuKeywordPositions(text);
 
         if (isZimo) {
             result.mode = 'zimo';
