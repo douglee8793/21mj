@@ -489,26 +489,30 @@
                     <label>設定密碼</label>
                     <input type="password" id="adminPassword" placeholder="自訂一個簡單密碼">
                 </div>
-                <div class="control-group">
+                <div class="control-group" style="margin-bottom:10px;">
                     <label>確認密碼</label>
                     <input type="password" id="adminPassword2" placeholder="再輸入一次">
                 </div>
-                <p class="token-note">Token 會加密後存到 GitHub repo，本身不會明文儲存。</p>
+                <div class="control-group">
+                    <label>共用 Google 語音辨識 Key（選填）</label>
+                    <input type="password" id="adminGoogleSttKey" placeholder="AIza...（留空＝不變更）">
+                </div>
+                <p class="token-note">Token 跟語音 Key 都會加密後存到 GitHub repo，本身不會明文儲存。設定過共用語音 Key 後，其他人只要在上面輸入密碼，這台裝置就會自動同步、不用再各自貼 Key。</p>
                 <button class="btn-confirm" style="width:100%;margin-top:10px;" onclick="adminSetup()">加密並儲存設定</button>
             </div>
         </details>
 
-        <!-- Google Cloud Speech-to-Text（只在這台語音測試頁使用，準確度比瀏覽器內建辨識好很多） -->
-        <details class="setup-section" open>
-            <summary>🎤 Google 語音辨識設定（選填，準確度較高）</summary>
+        <!-- Google Cloud Speech-to-Text 個人覆蓋設定（大多數人不需要，設定過共用 Key 就會自動同步） -->
+        <details class="setup-section">
+            <summary>🎤 語音辨識個人設定（選填，一般不需要）</summary>
             <div style="margin-top:12px;">
                 <div id="googleSttStatus" style="margin-bottom:10px;"></div>
                 <div class="control-group" style="margin-bottom:10px;">
                     <label>Google Cloud Speech-to-Text API Key</label>
                     <input type="password" id="googleSttKeyInput" placeholder="AIza...">
                 </div>
-                <p class="token-note">設定後語音輸入會改用 Google Cloud 辨識（準確度較好），只存在這台裝置的瀏覽器裡，不會上傳到 GitHub。清空後儲存可改回瀏覽器內建辨識。記得在 Google Cloud 後台把這組 Key 限制成只能從你的網域使用。</p>
-                <button class="btn-confirm" style="width:100%;margin-top:6px;" onclick="saveGoogleSttKey()">儲存 Google 設定</button>
+                <p class="token-note">只有想在這台裝置用「跟共用設定不同」的 Key 時才需要填。只存在這台裝置的瀏覽器裡，不會上傳到 GitHub，設定後會優先於共用 Key。清空後儲存可改回自動同步共用設定（或瀏覽器內建辨識）。</p>
+                <button class="btn-confirm" style="width:100%;margin-top:6px;" onclick="saveGoogleSttKey()">儲存個人設定</button>
             </div>
         </details>
 
@@ -639,14 +643,20 @@
         document.getElementById('adminToken').value = '';
         document.getElementById('adminPassword').value = '';
         document.getElementById('adminPassword2').value = '';
+        document.getElementById('adminGoogleSttKey').value = '';
         document.getElementById('googleSttKeyInput').value = '';
         const statusEl = document.getElementById('tokenStatus');
         try {
             const { data } = await fetchConfig();
             const isSet = !!data.tokenEncrypted;
-            statusEl.innerHTML = isSet
+            const hasSharedStt = !!data.sttKeyEncrypted;
+            statusEl.innerHTML = (isSet
                 ? '<span class="status-badge status-set">✅ 已設定加密 Token</span>'
-                : '<span class="status-badge status-unset">⚠️ 尚未設定 Token</span>';
+                : '<span class="status-badge status-unset">⚠️ 尚未設定 Token</span>')
+                + ' '
+                + (hasSharedStt
+                    ? '<span class="status-badge status-set">✅ 已設定共用語音 Key</span>'
+                    : '<span class="status-badge status-unset">⚠️ 尚未設定共用語音 Key</span>');
         } catch { statusEl.innerHTML = ''; }
 
         const googleStatusEl = document.getElementById('googleSttStatus');
@@ -665,15 +675,32 @@
             if (!data.tokenEncrypted) return alert('尚未設定 Token，請展開管理者設定區塊進行設定');
             await decryptToken(data, password);
             localStorage.setItem('mj_password', password);
+            await trySyncGoogleSttKeyFromConfig();
             closeTokenModal();
             alert('✅ 密碼正確，已儲存在此裝置！');
         } catch { alert('❌ 密碼錯誤'); }
+    }
+
+    // 用已快取的密碼，從 config.json 解密出共用的 Google 語音辨識 Key，成功就存進這台裝置的
+    // localStorage，之後 getGoogleSttKey() 就能直接同步讀取。個人手動設定過的 Key（見上方
+    // 「語音辨識個人設定」）優先權更高，不會被這裡覆蓋過去。
+    async function trySyncGoogleSttKeyFromConfig() {
+        if (getGoogleSttKey()) return;
+        const password = localStorage.getItem('mj_password');
+        if (!password) return;
+        try {
+            const { data } = await fetchConfig();
+            if (!data.sttKeyEncrypted) return;
+            const key = await decryptToken({ tokenEncrypted: data.sttKeyEncrypted, salt: data.sttSalt, iv: data.sttIv }, password);
+            if (key) localStorage.setItem(GOOGLE_STT_KEY_LS, key);
+        } catch { /* 密碼不對或解密失敗，靜默略過，語音會退回瀏覽器內建辨識 */ }
     }
 
     async function adminSetup() {
         const token    = document.getElementById('adminToken').value.trim();
         const password = document.getElementById('adminPassword').value;
         const password2= document.getElementById('adminPassword2').value;
+        const sttKey   = document.getElementById('adminGoogleSttKey').value.trim();
         if (!token)    return alert('請填入 GitHub Token');
         if (!password) return alert('請設定密碼');
         if (password !== password2) return alert('兩次密碼不一致');
@@ -682,11 +709,19 @@
         try {
             const { data, sha } = await fetchConfig();
             const encrypted = await encryptToken(token, password);
-            await pushConfig(encrypted, sha, token);
+            const newData = { ...data, ...encrypted };
+            if (sttKey) {
+                const sttEncrypted = await encryptToken(sttKey, password);
+                newData.sttKeyEncrypted = sttEncrypted.tokenEncrypted;
+                newData.sttSalt = sttEncrypted.salt;
+                newData.sttIv = sttEncrypted.iv;
+            }
+            await pushConfig(newData, sha, token);
             cachedConfig = null;
             localStorage.setItem('mj_password', password);
+            if (sttKey) localStorage.setItem(GOOGLE_STT_KEY_LS, sttKey);
             closeTokenModal();
-            alert('✅ 設定完成！Token 已加密儲存到 GitHub。');
+            alert('✅ 設定完成！Token' + (sttKey ? '跟語音 Key 都' : '') + '已加密儲存到 GitHub。');
         } catch (e) { alert('❌ 失敗：' + e.message); }
         finally { btn.textContent = '加密並儲存設定'; btn.disabled = false; }
     }
@@ -1999,6 +2034,9 @@
         const idleSelect = document.getElementById('idleSelect');
         PLAYERS.forEach((name, i) => idleSelect.add(new Option(name, i)));
 
+        // 如果這台裝置已經記得密碼（例如上次驗證過），順便嘗試同步共用的語音 Key，
+        // 不用使用者特地再打開設定一次
+        await trySyncGoogleSttKeyFromConfig();
         if (getGoogleSttKey()) document.getElementById('voiceBtn').textContent = '🎤 語音輸入（Google）';
 
         const hasPendingDraft = await checkForDraft();
