@@ -1359,11 +1359,12 @@
 
     // 數字同音字被聽成別的常用詞的情況（例如「五台」被聽成「舞台」），
     // 只在緊接著「台」的時候才替換，避免誤動到句子裡其他地方
-    const NUMERAL_HOMOPHONE_FIX = { '舞': '五', '誤': '五' };
+    // 實測驗證過的數字同音字：「入」被聽成「五」（"加入台"其實是"加五台"）
+    const NUMERAL_HOMOPHONE_FIX = { '舞': '五', '誤': '五', '入': '五' };
 
     // 把「三台」「二十三台」這類中文數字＋台，轉成阿拉伯數字＋台，方便後面統一用 /\d+台/ 抓取
     function normalizeVoiceNumbers(text) {
-        text = text.replace(/[舞誤](?=台)/g, (m) => NUMERAL_HOMOPHONE_FIX[m]);
+        text = text.replace(/[舞誤入](?=台)/g, (m) => NUMERAL_HOMOPHONE_FIX[m]);
         return text.replace(/([一二兩三四五六七八九十]{1,3})(?=台)/g, (match) => {
             const n = cnNumberToInt(match);
             return n === null ? match : String(n);
