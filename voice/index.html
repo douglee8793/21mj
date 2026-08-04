@@ -1498,8 +1498,10 @@
         const zimoKwList = findKeywordPositions(text, ['自摸', '次摸', '字摸']);
         const isZimo = zimoKwList.length > 0;
         const paoKw = findKeywordPositions(text, ['放炮', '放跑', '放泡']);
-        // 「胡」很容易被聽成「湖」「呼」，這裡把常見同音字也當關鍵字看待
-        const huKw = findKeywordPositions(text, ['胡', '糊', '湖', '呼']);
+        // 「胡」很容易被聽成「湖」「呼」，這裡把常見同音字也當關鍵字看待；
+        // 「服」則是實測發現「禕胡」常被整段聽成「衣服」（都唸類似 yi-hu/yi-fu 的音），
+        // 把「服」也當一種變體，才能從「李宗衣服戴志清十三台」這種句子救回關鍵字
+        const huKw = findKeywordPositions(text, ['胡', '糊', '湖', '呼', '服']);
 
         if (isZimo) {
             result.mode = 'zimo';
