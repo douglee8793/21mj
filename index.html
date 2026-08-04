@@ -1231,7 +1231,7 @@
             }
 
             confirmMsg = `【自摸模式】\n自摸：${PLAYERS[records.zimo]}\n總台數：${tai}`;
-            if (records.zimo !== dealerIdx) confirmMsg += `\n莊家：${PLAYERS[dealerIdx]}\n莊家加台：${extraTaiCount}`;
+            if (records.zimo !== dealerIdx && extraTaiCount > 0) confirmMsg += `\n莊家：${PLAYERS[dealerIdx]}\n莊家加台：${extraTaiCount}`;
             confirmMsg += `\n\n明細：`;
             seatIndices.forEach(idx => {
                 if (idx !== records.zimo) confirmMsg += `\n${PLAYERS[idx]}: -${playerLoss[idx]}`;
