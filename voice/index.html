@@ -1533,9 +1533,14 @@
         const huKw = findHuKeywordPositions(text);
 
         if (isZimo) {
+            // 自摸模式只有一種講法：「aaa 自摸 ??台，莊家 bbb 加 ??台」——
+            // 自摸的人固定講在「自摸」前面，莊家的人固定講在「莊家」後面。
+            // 跟放炮模式同樣道理，優先照這個固定順序找，找不到才退回不限方向找一次，
+            // 避免前後剛好各有一個名字時，比對品質打平手靠插入順序決勝負反而選錯人。
             result.mode = 'zimo';
             const zimoKw = zimoKwList[0];
-            const zimoMention = findNearestPlayer(text, mentions, zimoKw.pos, zimoKw.len, 6, null, null);
+            const zimoMention = findNearestPlayer(text, mentions, zimoKw.pos, zimoKw.len, 6, null, 'before')
+                || findNearestPlayer(text, mentions, zimoKw.pos, zimoKw.len, 6, null, null);
             if (zimoMention && !isIdle(zimoMention.idx)) result.zimoIdx = zimoMention.idx;
             else result.warnings.push(zimoMention ? (PLAYERS[zimoMention.idx] + ' 目前是閒家，不能自摸') : '聽不出自摸的人是誰');
 
@@ -1543,7 +1548,8 @@
             if (dealerKw) {
                 // 排除自摸家本人，避免精確比對抓不到莊家（例如莊家名字被聽錯）時，
                 // 誤把離「莊家」最近的精確提及（其實是自摸家自己）當成莊家
-                const dealerMention = findNearestPlayer(text, mentions, dealerKw.pos, dealerKw.len, 6, result.zimoIdx, null);
+                const dealerMention = findNearestPlayer(text, mentions, dealerKw.pos, dealerKw.len, 6, result.zimoIdx, 'after')
+                    || findNearestPlayer(text, mentions, dealerKw.pos, dealerKw.len, 6, result.zimoIdx, null);
                 if (dealerMention && !isIdle(dealerMention.idx)) result.dealerIdx = dealerMention.idx;
             }
             // 「加」常被聽成同音字「家」（都唸 jiā），這裡兩種都接受
