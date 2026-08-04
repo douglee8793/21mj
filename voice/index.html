@@ -1442,25 +1442,38 @@
         return positions;
     }
 
-    // 「胡」只有一個字，不能直接套用上面通用的「拼音距離<=1」規則：實測發現像「樹」(shu)
-    // 這種完全不相干的字，拼音距離到「胡」(hu) 也只有1（刪掉s而已），會被誤判成「胡」，
-    // 導致像「週樹偉放炮女中衣服四台」這種句子，「樹」被誤認成胡的關鍵字，整句配對整個配錯。
+    // 「胡」「莊」這種單一字的關鍵字錨點，不能直接套用通用的「拼音距離<=1」規則：實測發現
+    // 像「樹」(shu) 這種完全不相干的字，拼音距離到「胡」(hu) 也只有1（刪掉s而已），會被誤判成
+    // 「胡」，導致「週樹偉放炮女中衣服四台」這種句子，「樹」搶先被當成胡的關鍵字，整句配對配錯。
     // 兩個字以上的目標（放炮、自摸、人名）風險低很多，因為要好幾個字同時剛好都對到才會誤判，
-    // 但單一個字風險太高，所以「胡」改成更嚴格的規則：拼音完全相同（糊/湖/呼），或是拼音長度
-    // 一樣、只有聲母不同、而且剛好是已知容易混淆的聲母組合（目前只有 h/f，是「禕胡」被聽成
-    // 「衣服」這個實測案例驗證過的）。
-    const HU_CONFUSABLE_INITIALS = ['f']; // 聲母容易跟 h 混淆的字，目前只有 f（例：服）
-    function isHuLike(ch) {
-        if (ch === '胡') return true;
-        const p = pinyinOf(ch);
-        if (!p) return false;
-        if (p === 'hu') return true;
-        return p.length === 2 && p[1] === 'u' && HU_CONFUSABLE_INITIALS.includes(p[0]);
+    // 但單一個字風險太高，所以改成更嚴格的規則：拼音要完全相同（真正同音字，例如 糊/湖/呼），
+    // 或是實測驗證過、確認會被聽錯的特定字（不是預先亂猜的口語詞列表，是真的測到才加）：
+    // 目前有 服(fu，跟 胡/hu 聲母相近，「禕胡」被聽成「衣服」)；莊(zhuang) 則有 專(zhuan，
+    // 韻母相近，「莊家」被聽成「專家」) 跟 中(zhong，韻母相近，「莊家」被聽成「中家」)。
+    const VERIFIED_ANCHOR_EXTRAS = {
+        '胡': ['服'],
+        '莊': ['專', '中'],
+    };
+    function isAnchorLike(ch, target) {
+        if (ch === target) return true;
+        const p = pinyinOf(ch), pt = pinyinOf(target);
+        if (p && pt && p === pt) return true; // 真正同音字（不同聲調也算）
+        const extra = VERIFIED_ANCHOR_EXTRAS[target];
+        return !!(extra && extra.includes(ch));
     }
     function findHuKeywordPositions(text) {
         const positions = [];
         for (let i = 0; i < text.length; i++) {
-            if (isHuLike(text[i])) positions.push({ pos: i, len: 1 });
+            if (isAnchorLike(text[i], '胡')) positions.push({ pos: i, len: 1 });
+        }
+        return positions;
+    }
+    function findDealerKeywordPositions(text) {
+        const positions = [];
+        for (let i = 0; i + 1 < text.length; i++) {
+            if (isAnchorLike(text[i], '莊') && charSimilar(text[i + 1], '家')) {
+                positions.push({ pos: i, len: 2 });
+            }
         }
         return positions;
     }
@@ -1544,9 +1557,9 @@
             if (zimoMention && !isIdle(zimoMention.idx)) result.zimoIdx = zimoMention.idx;
             else result.warnings.push(zimoMention ? (PLAYERS[zimoMention.idx] + ' 目前是閒家，不能自摸') : '聽不出自摸的人是誰');
 
-            // 「莊家」跟「胡/放炮/自摸」同樣用拼音容錯比對（例如「專家」常被誤聽成「莊家」，
-            // zhuan/zhuang 拼音距離只差1），是2個字的目標，誤觸發風險跟放炮/自摸一樣低
-            const dealerKw = findFuzzyKeywordPositions(text, '莊家')[0];
+            // 「莊」是單一字錨點，跟「胡」一樣改用 isAnchorLike 的嚴格規則（見上方說明），
+            // 「家」維持一般拼音容錯即可
+            const dealerKw = findDealerKeywordPositions(text)[0];
             if (dealerKw) {
                 // 排除自摸家本人，避免精確比對抓不到莊家（例如莊家名字被聽錯）時，
                 // 誤把離「莊家」最近的精確提及（其實是自摸家自己）當成莊家
