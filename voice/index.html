@@ -1708,6 +1708,14 @@
         return getGoogleSttKey() ? toggleGoogleVoiceInput() : toggleBrowserVoiceInput();
     }
 
+    // 語音輸入進行中時，把「增加戰績」鎖起來防止誤觸；draftLocked（已在其他裝置結算）優先權更高，
+    // 不管語音狀態如何都要保持鎖定
+    function setMainActionEnabled(enabled) {
+        const btn = document.getElementById('mainActionBtn');
+        if (!btn) return;
+        btn.disabled = draftLocked ? true : !enabled;
+    }
+
     // 方案 A：Google Cloud STT（按一次開始錄音，再按一次結束並送出辨識）
     async function toggleGoogleVoiceInput() {
         const statusEl = document.getElementById('voiceStatus');
@@ -1735,6 +1743,7 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🎤 語音輸入（Google）';
+                setMainActionEnabled(true);
             }
             return;
         }
@@ -1758,6 +1767,7 @@
         googleRecording = true;
         btn.textContent = '🔴 錄音中…（再按一次結束並辨識）';
         statusEl.textContent = '請說，例如：「戴志清放炮，李中禕胡，三台，詹偉凱插花」，說完按一次「結束」';
+        setMainActionEnabled(false);
     }
 
     // 方案 B：瀏覽器內建 SpeechRecognition（沒有設定 Google API Key 時使用）
@@ -1790,10 +1800,12 @@
         recognizer.onend = function () {
             voiceListening = false;
             btn.textContent = '🎤 語音輸入';
+            setMainActionEnabled(true);
         };
 
         try {
             recognizer.start();
+            setMainActionEnabled(false);
         } catch (e) {
             statusEl.textContent = '⚠️ 無法啟動麥克風：' + e.message;
             voiceListening = false;
