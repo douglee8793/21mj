@@ -1682,7 +1682,9 @@
         if (r.tai !== null) document.getElementById('taiCount').value = r.tai;
         if (r.mode === 'zimo') {
             if (r.dealerIdx !== null) document.getElementById('dealerSelect').value = r.dealerIdx;
-            if (r.extraTai !== null) document.getElementById('extraTai').value = r.extraTai;
+            // 莊家加台每次語音輸入前先清成0，避免上一輪殘留的數字被誤用到這一輪
+            // （這輪如果真的有講「加X台」，下面會用新的值覆蓋過去）
+            document.getElementById('extraTai').value = (r.extraTai !== null) ? r.extraTai : 0;
         }
 
         return true;
