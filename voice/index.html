@@ -1523,10 +1523,21 @@
             // 「胡」跟「放炮」只要聽到任一個關鍵字就能判斷是放炮模式；另一個沒講/沒聽到的話，
             // 改用語序判斷——「放炮」跟「胡」通常緊鄰著各自對應的名字，且順序固定是
             // 「放炮的人…放炮，胡的人…胡」，所以找不到的那個關鍵字，就往已知關鍵字後面找名字。
+            //
+            // 實測發現：關鍵字自己對應的名字幾乎都講在關鍵字「前面」（例如「戴志清放炮」「週樹偉湖」），
+            // 所以優先往前找；找不到才不限方向找一次。這也修正了「週樹偉湖戴志清三台」這種只講一個關鍵字、
+            // 前後各有一個名字時，因為前面是拼音容錯比對、後面剛好是精確比對，導致精確比對「贏在距離平手」
+            // 而配錯人的 bug（週樹偉才是胡的人，戴志清應該是後面沒講關鍵字、順位配到放炮的人）。
             result.mode = 'pao';
 
-            let huMention = huKw.length ? findNearestPlayer(text, mentions, huKw[0].pos, huKw[0].len, 6, null, null) : null;
-            let paoMention = paoKw.length ? findNearestPlayer(text, mentions, paoKw[0].pos, paoKw[0].len, 6, huMention ? huMention.idx : null, null) : null;
+            let huMention = huKw.length
+                ? (findNearestPlayer(text, mentions, huKw[0].pos, huKw[0].len, 6, null, 'before')
+                    || findNearestPlayer(text, mentions, huKw[0].pos, huKw[0].len, 6, null, null))
+                : null;
+            let paoMention = paoKw.length
+                ? (findNearestPlayer(text, mentions, paoKw[0].pos, paoKw[0].len, 6, huMention ? huMention.idx : null, 'before')
+                    || findNearestPlayer(text, mentions, paoKw[0].pos, paoKw[0].len, 6, huMention ? huMention.idx : null, null))
+                : null;
 
             if (!huMention && paoKw.length) {
                 // 沒聽到「胡」：胡家的名字通常講在「放炮」後面
