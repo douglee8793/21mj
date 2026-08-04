@@ -1882,7 +1882,7 @@
         const Ctor = getSpeechRecognitionCtor();
 
         if (!Ctor) {
-            statusEl.textContent = '⚠️ 這個瀏覽器不支援語音辨識（iPhone Safari 目前不支援），請改用手動按鈕，或用 Android/Chrome 測試。';
+            statusEl.textContent = '⚠️ 這個瀏覽器不支援語音辨識。iPhone/iPad 上不管用 Safari、Chrome 或其他瀏覽器都一樣（蘋果規定所有 iOS 瀏覽器底層都要用同一套引擎），請改用手動按鈕輸入；電腦或 Android 上的 Chrome 可以正常使用語音功能。';
             return;
         }
         if (voiceListening) { recognizer && recognizer.stop(); return; }
