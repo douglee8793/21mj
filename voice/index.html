@@ -1392,18 +1392,6 @@
         return positions;
     }
 
-    // 找關鍵字前後最近的玩家名字提及（「戴志清放炮」名字在前；「莊家是李中禕」名字在後）
-    function nearestMentionNearKeyword(mentions, keywordPos, keywordLen, maxGap) {
-        let best = null, bestDist = Infinity;
-        mentions.forEach(m => {
-            let dist = null;
-            if (m.pos >= keywordPos + keywordLen) dist = m.pos - (keywordPos + keywordLen);
-            else if (m.end <= keywordPos) dist = keywordPos - m.end;
-            if (dist !== null && dist <= maxGap && dist < bestDist) { bestDist = dist; best = m; }
-        });
-        return best;
-    }
-
     // 只收錄玩家全名的字＋實測／常見同音或形近的誤聽字，拼音不含聲調（聲調是辨識最容易出錯的部分）
     const PINYIN_MAP = {
         '高': 'gao', '玉': 'yu', '川': 'chuan',
@@ -1446,30 +1434,53 @@
         return levenshtein(pa, pb) <= 1;
     }
 
-    // 精確比對失敗時的備援：在指定範圍（[fromPos, toPos)）內找拼音最接近某玩家全名的片段
-    // excludeIdx 用來避免同一段誤聽文字被重複配對成兩個不同角色（例如胡跟放炮抓成同一人）
-    function fuzzyFindPlayerNear(text, fromPos, toPos, excludeIdx) {
-        const start = Math.max(0, fromPos), end = Math.min(text.length, toPos);
+    // 統一在關鍵字附近找玩家：把「精確比對」跟「拼音容錯比對」兩種候選放在同一個池子裡，
+    // 一律用「離關鍵字的字元距離」決定最終選誰，距離相同才用比對品質（精確1.0 > 容錯0.66~1.0）當 tie-breaker。
+    //
+    // 這是修正一個實測發現的重要 bug：舊版邏輯是「先看有沒有精確比對，有就直接用，完全不管多遠；
+    // 找不到精確比對才退回拼音容錯」。結果像「戴志清放炮週樹偉湖三台」這種句子，「戴志清」精確比對
+    // 成功但離「湖(胡)」關鍵字很遠，「週樹偉」明明就緊貼在「湖」前面、拼音容錯應該完美比對成周樹偉，
+    // 卻因為戴志清是「精確比對」而搶先勝出，導致胡家/放炮整個配反。改成統一比距離之後就不會有這問題。
+    //
+    // direction 可選 'before' / 'after'，用來限制只找關鍵字前面或後面的提及（例如插花對象通常講在前面）；
+    // 不傳則不限制方向。
+    function findNearestPlayer(text, mentions, keywordPos, keywordLen, maxGap, excludeIdx, direction) {
+        const candidates = [];
+        function distTo(mPos, mEnd) {
+            if (mPos >= keywordPos + keywordLen) return { dist: mPos - (keywordPos + keywordLen), side: 'after' };
+            if (mEnd <= keywordPos) return { dist: keywordPos - mEnd, side: 'before' };
+            return { dist: 0, side: 'overlap' };
+        }
+
+        mentions.forEach(m => {
+            if (m.idx === excludeIdx) return;
+            const { dist, side } = distTo(m.pos, m.end);
+            if (dist > maxGap) return;
+            if (direction && side !== 'overlap' && side !== direction) return;
+            candidates.push({ idx: m.idx, dist, quality: 1 });
+        });
+
+        const start = Math.max(0, keywordPos - maxGap), end = Math.min(text.length, keywordPos + keywordLen + maxGap);
         const window = text.slice(start, end);
-        let best = null, bestScore = 0;
         PLAYERS.forEach((name, idx) => {
             if (idx === excludeIdx) return;
             for (let i = 0; i <= window.length - name.length; i++) {
                 const chunk = window.slice(i, i + name.length);
                 let matches = 0;
                 for (let k = 0; k < name.length; k++) if (charSimilar(chunk[k], name[k])) matches++;
-                const score = matches / name.length;
-                if (score >= 0.66 && score > bestScore) { bestScore = score; best = { idx, chunk, score, fuzzy: true }; }
+                const quality = matches / name.length;
+                if (quality < 0.66) continue;
+                const chunkPos = start + i, chunkEnd = chunkPos + name.length;
+                const { dist, side } = distTo(chunkPos, chunkEnd);
+                if (dist > maxGap) continue;
+                if (direction && side !== 'overlap' && side !== direction) continue;
+                candidates.push({ idx, dist, quality });
             }
         });
-        return best;
-    }
 
-    // 依序：精確比對關鍵字附近 → 找不到就拼音容錯比對同一範圍
-    function findRoleMention(text, mentions, keywordPos, keywordLen, maxGap, excludeIdx) {
-        const exact = nearestMentionNearKeyword(mentions, keywordPos, keywordLen, maxGap);
-        if (exact && exact.idx !== excludeIdx) return exact;
-        return fuzzyFindPlayerNear(text, keywordPos - maxGap, keywordPos + keywordLen + maxGap, excludeIdx);
+        if (!candidates.length) return null;
+        candidates.sort((a, b) => (a.dist - b.dist) || (b.quality - a.quality));
+        return { idx: candidates[0].idx };
     }
 
     function parseVoiceCommand(rawText) {
@@ -1491,7 +1502,7 @@
         if (isZimo) {
             result.mode = 'zimo';
             const zimoKw = findKeywordPositions(text, ['自摸'])[0];
-            const zimoMention = findRoleMention(text, mentions, zimoKw.pos, zimoKw.len, 6, null);
+            const zimoMention = findNearestPlayer(text, mentions, zimoKw.pos, zimoKw.len, 6, null, null);
             if (zimoMention && !isIdle(zimoMention.idx)) result.zimoIdx = zimoMention.idx;
             else result.warnings.push(zimoMention ? (PLAYERS[zimoMention.idx] + ' 目前是閒家，不能自摸') : '聽不出自摸的人是誰');
 
@@ -1499,7 +1510,7 @@
             if (dealerKw) {
                 // 排除自摸家本人，避免精確比對抓不到莊家（例如莊家名字被聽錯）時，
                 // 誤把離「莊家」最近的精確提及（其實是自摸家自己）當成莊家
-                const dealerMention = findRoleMention(text, mentions, dealerKw.pos, dealerKw.len, 6, result.zimoIdx);
+                const dealerMention = findNearestPlayer(text, mentions, dealerKw.pos, dealerKw.len, 6, result.zimoIdx, null);
                 if (dealerMention && !isIdle(dealerMention.idx)) result.dealerIdx = dealerMention.idx;
             }
             // 「加」常被聽成同音字「家」（都唸 jiā），這裡兩種都接受
@@ -1511,17 +1522,16 @@
             // （「李中禕胡周樹偉三台」＝ 胡後面緊接的那個名字就是放炮的人）
             result.mode = 'pao';
 
-            const huMention = findRoleMention(text, mentions, huKw[0].pos, huKw[0].len, 6, null);
+            const huMention = findNearestPlayer(text, mentions, huKw[0].pos, huKw[0].len, 6, null, null);
             if (huMention && !isIdle(huMention.idx)) result.huIdx = huMention.idx;
             else result.warnings.push(huMention ? (PLAYERS[huMention.idx] + ' 目前是閒家，不能胡牌') : '聽不出胡牌的人是誰');
 
             let paoMention = null;
             if (paoKw.length) {
-                paoMention = findRoleMention(text, mentions, paoKw[0].pos, paoKw[0].len, 6, result.huIdx);
+                paoMention = findNearestPlayer(text, mentions, paoKw[0].pos, paoKw[0].len, 6, result.huIdx, null);
             } else {
-                const afterPos = huKw[0].pos + huKw[0].len;
-                const afterExact = mentions.find(m => m.pos >= afterPos && m.idx !== result.huIdx);
-                paoMention = afterExact || fuzzyFindPlayerNear(text, afterPos, afterPos + 6, result.huIdx);
+                // 沒講「放炮」：只找「胡」後面的人（語序判斷），不能往前找，否則可能又抓回胡家自己
+                paoMention = findNearestPlayer(text, mentions, huKw[0].pos, huKw[0].len, 6, result.huIdx, 'after');
             }
             if (paoMention && !isIdle(paoMention.idx)) result.paoIdx = paoMention.idx;
             else result.warnings.push(paoMention ? (PLAYERS[paoMention.idx] + ' 目前是閒家，不能放炮') : '聽不出放炮的人是誰');
@@ -1540,14 +1550,9 @@
 
         const flowerKw = findKeywordPositions(text, ['插花'])[0];
         if (flowerKw) {
-            let bestBefore = null, bestDist = Infinity;
-            mentions.forEach(m => {
-                if (m.end <= flowerKw.pos) {
-                    const dist = flowerKw.pos - m.end;
-                    if (dist <= 6 && dist < bestDist) { bestDist = dist; bestBefore = m; }
-                }
-            });
-            const best = bestBefore || findRoleMention(text, mentions, flowerKw.pos, flowerKw.len, 6, null);
+            // 插花對象通常講在「插花」前面（例如「詹偉凱插花」），優先往前找，找不到再不限方向找一次
+            const best = findNearestPlayer(text, mentions, flowerKw.pos, flowerKw.len, 6, null, 'before')
+                || findNearestPlayer(text, mentions, flowerKw.pos, flowerKw.len, 6, null, null);
             if (best && !isIdle(best.idx)) result.flowerIdx = best.idx;
         }
 
