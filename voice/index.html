@@ -1554,8 +1554,15 @@
                     || findNearestPlayer(text, mentions, dealerKw.pos, dealerKw.len, 6, result.zimoIdx, null);
                 if (dealerMention && !isIdle(dealerMention.idx)) result.dealerIdx = dealerMention.idx;
             }
-            // 「加」常被聽成同音字「家」（都唸 jiā），這裡兩種都接受
-            const extraM = text.match(/[加家](\d+)台/);
+            // 「加」常被聽成同音字（家、佳、嘉...都唸 jiā），跟胡/放炮/自摸/莊家一樣
+            // 改用拼音同音比對，取代原本手動列的 [加家]
+            let extraM = null;
+            for (let i = 0; i < text.length; i++) {
+                if (charSimilar(text[i], '加')) {
+                    const m = text.slice(i + 1).match(/^(\d+)台/);
+                    if (m) { extraM = m; break; }
+                }
+            }
             if (extraM) result.extraTai = parseInt(extraM[1], 10);
 
         } else if (huKw.length || paoKw.length) {
