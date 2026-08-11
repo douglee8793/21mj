@@ -1,0 +1,37 @@
+{
+  "draftId": "dmsof1sgkepcv3n",
+  "updatedAt": "2026-08-11T08:46:21.893Z",
+  "settings": {
+    "baseScore": "100",
+    "maxTai": "30",
+    "idleIndex": 4,
+    "winType": "0",
+    "autoRotate": true,
+    "flowerEnabled": false
+  },
+  "history": [
+    {
+      "res": {
+        "高玉川": 0,
+        "李中禕": 190,
+        "周樹偉": 0,
+        "詹偉凱": 0,
+        "戴志清": -190
+      },
+      "cumu": {
+        "高玉川": 0,
+        "李中禕": 190,
+        "周樹偉": 0,
+        "詹偉凱": 0,
+        "戴志清": -190
+      }
+    }
+  ],
+  "totalScores": {
+    "高玉川": 0,
+    "李中禕": 190,
+    "周樹偉": 0,
+    "詹偉凱": 0,
+    "戴志清": -190
+  }
+}
