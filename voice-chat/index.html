@@ -2217,7 +2217,8 @@
 
         const data = new Uint8Array(analyser.frequencyBinCount);
         const SPEECH_THRESHOLD = 12;  // 音量門檻（0~255，經驗值，太吵的環境可能要調高）
-        const SILENCE_MS = 600;       // 講完話後安靜超過這麼久，就當作講完了
+        const SILENCE_MS = 1200;      // 講完話後安靜超過這麼久，才當作講完了——寧可等久一點，
+                                       // 也不要把一句話中間正常的換氣停頓誤判成講完，切斷還沒講完的句子
         const MIN_SPEECH_MS = 300;    // 至少偵測到這麼久的聲音才算真的有講話，濾掉雜訊瞬間
         let hasSpoken = false, speechStart = null, silenceStart = null, stopped = false;
 
@@ -2296,7 +2297,9 @@
     // 語音判斷是不是「播報戰績」指令——講出來就唸一次本場所有人目前的總勝負，
     // 跟每局結束後的確認流程分開，平常確認不會自動報總分，要報就用這句話喊一下。
     function parseBroadcastStandingsVoiceCommand(text) {
-        const hasVerb = text.includes('播報') || text.includes('報告') || text.includes('唸') || text.includes('報');
+        // 動詞用比較完整的詞（不用單獨一個「報」或「唸」字），降低跟正常戰績語句誤判的機會
+        const hasVerb = text.includes('播報') || text.includes('報告') || text.includes('報一下')
+            || text.includes('唸一下') || text.includes('唸出') || text.includes('查一下');
         const hasTopic = findFuzzyKeywordPositions(text, '戰績').length > 0 || text.includes('比分') || text.includes('分數');
         return hasVerb && hasTopic;
     }
@@ -2357,7 +2360,7 @@
             if (parsed.warnings.length) msg += '<br><span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
             statusEl.innerHTML = msg;
 
-            await runVoiceConfirmationLoop(statusEl, 2);
+            await runVoiceConfirmationLoop(statusEl);
         } finally {
             voiceChatBusy = false;
             btn.disabled = false;
@@ -2366,9 +2369,27 @@
         }
     }
 
-    // 唸摘要 → 聽確認/取消 → 依結果送出或取消；聽不清楚時最多重試 retriesLeft 次，
-    // 超過就交回手動操作（畫面上按鈕確認一樣可以送出，語音只是省事，不是唯一途徑）
-    async function runVoiceConfirmationLoop(statusEl, retriesLeft) {
+    // 判斷是不是「不管重聽幾次都沒用」的硬性錯誤（瀏覽器不支援語音辨識、拿不到麥克風權限等）。
+    // 這種才需要放棄改用手動；「沒聽到聲音」這類只是這次剛好沒講清楚或環境安靜，
+    // 不算硬性錯誤，應該繼續等待明確結果，不能隨便跳出。
+    function isUnrecoverableListenError(e) {
+        const msg = (e && e.message) || '';
+        return msg.includes('不支援') || msg.includes('麥克風權限') || msg.includes('無法啟動麥克風');
+    }
+
+    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    // 唸完摘要要開始聽之前，稍微停一下（給喇叭聲音一點時間消散），
+    // 避免手機/電腦沒有耳機時，喇叭播出的語音殘響被麥克風錄進去干擾辨識。
+    const POST_SPEAK_PAUSE_MS = 350;
+
+    const CONFIRM_LISTEN_MAX_ATTEMPTS = 8; // 保底上限，避免麥克風真的收不到聲音時卡死畫面
+
+    // 唸摘要 → 一直聽，直到聽到明確的「確認」或「取消」才停下來送出或取消；
+    // 沒聽到聲音、或聽到了但分類不出來，都只是再問一次，不會因為單次沒辨識到就放棄。
+    // 只有硬性錯誤（不支援/沒麥克風權限）或試了 CONFIRM_LISTEN_MAX_ATTEMPTS 次都沒有明確結果，
+    // 才會交回手動操作（畫面上按鈕確認一樣可以送出，語音只是省事，不是唯一途徑）。
+    async function runVoiceConfirmationLoop(statusEl) {
         const result = computeRoundResult();
         if (result.error) {
             statusEl.innerHTML += '<br><span style="color:#e65100;">⚠️ ' + result.error + '</span>';
@@ -2376,35 +2397,46 @@
             return;
         }
         await speakAsync(result.spokenSummary);
+        await sleep(POST_SPEAK_PAUSE_MS);
         statusEl.innerHTML += '<br>🎙️ 請說「確認」或「取消」…';
 
-        let answerText;
-        try {
-            answerText = await listenOnce(3000);
-        } catch (e) {
-            statusEl.innerHTML += '<br>⚠️ ' + e.message + '（請改用畫面按鈕確認）';
-            return;
-        }
-        statusEl.innerHTML += '<br>🗣️ 聽到：「' + answerText + '」';
-        const verdict = classifyConfirmation(answerText);
+        for (let attempt = 1; attempt <= CONFIRM_LISTEN_MAX_ATTEMPTS; attempt++) {
+            let answerText;
+            try {
+                answerText = await listenOnce(3000);
+            } catch (e) {
+                if (isUnrecoverableListenError(e)) {
+                    statusEl.innerHTML += '<br>⚠️ ' + e.message + '（請改用畫面按鈕確認）';
+                    return;
+                }
+                // 這次沒聽到聲音，繼續等，不放棄
+                statusEl.innerHTML += '<br>（沒聽到聲音，再說一次「確認」或「取消」…）';
+                continue;
+            }
+            statusEl.innerHTML += '<br>🗣️ 聽到：「' + answerText + '」';
+            const verdict = classifyConfirmation(answerText);
 
-        if (verdict === 'yes') {
-            commitRoundResult(result.roundRes, result.winType);
-            // 確認後直接計入戰績即可，不用再唸總勝負——想聽總分時用語音說「播報戰績」
-            statusEl.innerHTML += '<br>✅ 已計入戰績';
-            await speakAsync('已送出');
-        } else if (verdict === 'no') {
-            resetSelections();
-            renderPlayers();
-            statusEl.innerHTML += '<br>已取消，請重新輸入';
-            await speakAsync('好，已取消');
-        } else if (retriesLeft > 0) {
-            await speakAsync('沒聽清楚，請說確認或取消');
-            await runVoiceConfirmationLoop(statusEl, retriesLeft - 1);
-        } else {
-            statusEl.innerHTML += '<br>⚠️ 聽不清楚確認語句，請改用畫面按鈕確認';
-            await speakAsync('聽不清楚，請直接用畫面按鈕確認');
+            if (verdict === 'yes') {
+                commitRoundResult(result.roundRes, result.winType);
+                // 確認後直接計入戰績即可，不用再唸總勝負——想聽總分時用語音說「播報戰績」
+                statusEl.innerHTML += '<br>✅ 已計入戰績';
+                await speakAsync('已送出');
+                return;
+            } else if (verdict === 'no') {
+                resetSelections();
+                renderPlayers();
+                statusEl.innerHTML += '<br>已取消，請重新輸入';
+                await speakAsync('好，已取消');
+                return;
+            } else {
+                await speakAsync('沒聽清楚，請說確認或取消');
+                await sleep(POST_SPEAK_PAUSE_MS);
+                statusEl.innerHTML += '<br>🎙️ 請再說一次「確認」或「取消」…';
+            }
         }
+
+        statusEl.innerHTML += '<br>⚠️ 試了好幾次都沒聽到明確結果，請改用畫面按鈕確認';
+        await speakAsync('聽不清楚，請直接用畫面按鈕確認');
     }
 
     // ── Draft resume flow ──
