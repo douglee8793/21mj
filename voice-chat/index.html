@@ -1346,7 +1346,10 @@
             const paoLoss = -roundRes[PLAYERS[records.pao]];
             confirmMsg = `【放炮模式】\n胡家：${PLAYERS[records.hu]} (+${huGain})\n放炮：${PLAYERS[records.pao]} (-${paoLoss})`;
             confirmMsg += flowerMsg;
-            spokenSummary = `胡家 ${PLAYERS[records.hu]}，放炮 ${PLAYERS[records.pao]}，${tai}台${spokenFlower}，請確認`;
+            // 除了模式跟台數，再唸一次「當局」實際輸贏金額，只唸有變動的人（沒下場的閒家自然不會有金額）
+            const deltaParts0 = PLAYERS.filter(p => roundRes[p] !== 0)
+                .map(p => p + (roundRes[p] > 0 ? ' 加 ' : ' 負 ') + Math.abs(roundRes[p]));
+            spokenSummary = `胡家 ${PLAYERS[records.hu]}，放炮 ${PLAYERS[records.pao]}，${tai}台${spokenFlower}。當局：${deltaParts0.join('，')}，請確認`;
         } else {
             if (records.zimo === null) return { error: "請選自摸家" };
             let dealerIdx = parseInt(document.getElementById('dealerSelect').value);
@@ -1398,7 +1401,10 @@
             });
             confirmMsg += `\n${PLAYERS[records.zimo]}: +${roundRes[PLAYERS[records.zimo]]}`;
             confirmMsg += flowerMsg;
-            spokenSummary = `自摸 ${PLAYERS[records.zimo]}，${tai}台${spokenDealer}${spokenFlower}，請確認`;
+            // 除了模式跟台數，再唸一次「當局」實際輸贏金額，只唸有變動的人（沒下場的閒家自然不會有金額）
+            const deltaParts1 = PLAYERS.filter(p => roundRes[p] !== 0)
+                .map(p => p + (roundRes[p] > 0 ? ' 加 ' : ' 負 ') + Math.abs(roundRes[p]));
+            spokenSummary = `自摸 ${PLAYERS[records.zimo]}，${tai}台${spokenDealer}${spokenFlower}。當局：${deltaParts1.join('，')}，請確認`;
         }
 
         return { roundRes, confirmMsg, spokenSummary, winType };
