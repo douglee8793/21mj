@@ -385,6 +385,34 @@
         .manual-correct summary::before { content: '▸ '; }
         .manual-correct[open] summary::before { content: '▾ '; }
         .manual-correct[open] summary { color: #673ab7; font-weight: bold; }
+        .manual-hint { font-size: 13px; color: #888; margin: 4px 0 14px; line-height: 1.6; }
+
+        /* ── 直接更正累積分數：一人一格，字放大方便看清楚 ── */
+        .manual-score-grid { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+        .manual-score-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 10px 14px;
+        }
+        .manual-score-row label { font-size: 16px; color: #333; }
+        .manual-score-row input {
+            width: 120px;
+            font-size: 18px;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        /* ── 進階規則輸入：收在手動更正裡面更深一層，預設也收合 ── */
+        .rule-entry-fallback { margin-top: 20px; border-top: 1px dashed #ddd; padding-top: 10px; }
+        .rule-entry-fallback summary { font-size: 13px; color: #aaa; cursor: pointer; padding: 6px 0; list-style: none; }
+        .rule-entry-fallback summary::-webkit-details-marker { display: none; }
+        .rule-entry-fallback summary::before { content: '▸ '; }
+        .rule-entry-fallback[open] summary::before { content: '▾ '; }
 
         /* ── 常駐狀態列：閒家跟自動換閒家開關，隨時看得到，不用打開手動更正 ── */
         .game-status-bar {
@@ -458,54 +486,63 @@
         <button id="deleteLastBtn" onclick="deleteLast()" style="color:red;background:none;text-decoration:underline;width:100%;margin-top:10px;">刪除最後一局</button>
     </div>
 
-    <!-- 手動更正：語音沒聽對，或想直接用按鈕操作時才需要打開 -->
-    <details class="manual-correct">
-        <summary>手動更正 / 手動輸入</summary>
+    <!-- 手動更正：語音沒聽對時，直接改「目前累積分數」就好，不用重新選胡家/放炮/自摸/台數 -->
+    <details class="manual-correct" ontoggle="if(this.open) renderManualScoreInputs()">
+        <summary>手動更正</summary>
+        <p class="manual-hint">改完數字按「更新累積分數」即可，會直接計入戰績（可在「本場積分表」下方用「刪除最後一局」復原）。</p>
 
-        <div class="settings-grid">
-            <div class="control-group">
-                <label>底價</label>
-                <input type="number" id="baseScore" value="100">
-            </div>
-            <div class="control-group">
-                <label>台金</label>
-                <input type="number" id="maxTai" value="30">
-            </div>
-            <div class="control-group">
-                <label>勝負方式</label>
-                <select id="winType" onchange="resetSelections(); renderPlayers();">
-                    <option value="0">放炮</option>
-                    <option value="1">自摸</option>
-                </select>
-            </div>
-            <div class="toggle-group">
-                <label><input type="checkbox" id="flowerEnabled" onchange="renderPlayers()"> 插花功能</label>
-            </div>
-        </div>
+        <div id="manualScoreGrid" class="manual-score-grid"></div>
+        <button class="main-action" id="manualScoreBtn" onclick="applyManualScoreCorrection()">更新累積分數</button>
 
-        <div id="dealerSection" style="display:none;">
-            <div style="display:flex; flex-wrap:wrap; justify-content:space-around; align-items:center; gap:10px;">
+        <!-- 進階：沒有語音時（例如 iOS），還是可以用胡家/放炮/自摸規則讓系統自動算分 -->
+        <details class="rule-entry-fallback">
+            <summary>進階：用規則重新輸入本局（沒有語音時可以用這個）</summary>
+
+            <div class="settings-grid">
                 <div class="control-group">
-                    <label>莊家是誰？</label>
-                    <select id="dealerSelect"></select>
+                    <label>底價</label>
+                    <input type="number" id="baseScore" value="100">
                 </div>
                 <div class="control-group">
-                    <label>莊家加台</label>
-                    <input type="number" id="extraTai" value="0">
+                    <label>台金</label>
+                    <input type="number" id="maxTai" value="30">
+                </div>
+                <div class="control-group">
+                    <label>勝負方式</label>
+                    <select id="winType" onchange="resetSelections(); renderPlayers();">
+                        <option value="0">放炮</option>
+                        <option value="1">自摸</option>
+                    </select>
+                </div>
+                <div class="toggle-group">
+                    <label><input type="checkbox" id="flowerEnabled" onchange="renderPlayers()"> 插花功能</label>
                 </div>
             </div>
-        </div>
 
-        <div class="settings-grid" style="background:#e8f5e9;">
-            <div class="control-group" style="grid-column:span 2;">
-                <label>輸入台數 (自摸請輸入含自摸在內的總台數)</label>
-                <input type="number" id="taiCount" value="0" min="0" inputmode="numeric" onblur="clampTai(this)">
+            <div id="dealerSection" style="display:none;">
+                <div style="display:flex; flex-wrap:wrap; justify-content:space-around; align-items:center; gap:10px;">
+                    <div class="control-group">
+                        <label>莊家是誰？</label>
+                        <select id="dealerSelect"></select>
+                    </div>
+                    <div class="control-group">
+                        <label>莊家加台</label>
+                        <input type="number" id="extraTai" value="0">
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <div id="playerGrid" class="player-grid"></div>
+            <div class="settings-grid" style="background:#e8f5e9;">
+                <div class="control-group" style="grid-column:span 2;">
+                    <label>輸入台數 (自摸請輸入含自摸在內的總台數)</label>
+                    <input type="number" id="taiCount" value="0" min="0" inputmode="numeric" onblur="clampTai(this)">
+                </div>
+            </div>
 
-        <button class="main-action" id="mainActionBtn" onclick="addRecord()">增加戰績</button>
+            <div id="playerGrid" class="player-grid"></div>
+
+            <button class="main-action" id="mainActionBtn" onclick="addRecord()">增加戰績</button>
+        </details>
     </details>
 </div>
 
@@ -1441,6 +1478,54 @@
         alert("紀錄成功！");
     }
 
+    // ── 手動更正：直接改「目前累積分數」，不用重新選胡家/放炮/自摸/台數 ──
+    // 開啟「手動更正」摺疊區時（見 ontoggle），把每個人目前的累積分數填進輸入框，
+    // 讓使用者用畫面上看到的數字修改，改完按更新即可。
+    function renderManualScoreInputs() {
+        const grid = document.getElementById('manualScoreGrid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        PLAYERS.forEach(p => {
+            const row = document.createElement('div');
+            row.className = 'manual-score-row';
+            const label = document.createElement('label');
+            label.textContent = p;
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'manual-score-input';
+            input.dataset.player = p;
+            input.value = totalScores[p];
+            row.appendChild(label);
+            row.appendChild(input);
+            grid.appendChild(row);
+        });
+    }
+
+    // 把輸入框裡的新數字跟目前累積分數的差額，當成一筆「更正」紀錄送進 commitRoundResult()，
+    // 這樣才會維持跟語音/按鈕輸入同一套記錄方式（history 裡看得到、草稿會同步），
+    // 而不是偷偷改 totalScores 造成資料對不起來。
+    function applyManualScoreCorrection() {
+        if (draftLocked) { alert('🔒 此場已在其他裝置完成結算，請重新整理頁面開始新場次。'); return; }
+        const inputs = document.querySelectorAll('.manual-score-input');
+        const roundRes = {};
+        PLAYERS.forEach(p => roundRes[p] = 0);
+        let changed = false;
+        let hasInvalid = false;
+        inputs.forEach(inp => {
+            const p = inp.dataset.player;
+            const newVal = parseInt(inp.value, 10);
+            if (isNaN(newVal)) { hasInvalid = true; return; }
+            const delta = newVal - totalScores[p];
+            if (delta !== 0) { roundRes[p] = delta; changed = true; }
+        });
+        if (hasInvalid) return alert('有欄位不是有效數字，請檢查');
+        if (!changed) return alert('數字沒有變動，不用更新');
+        if (!confirm('確定要把累積分數改成這樣嗎？')) return;
+        commitRoundResult(roundRes, 'manual');
+        renderManualScoreInputs();
+        alert('✅ 已更新累積分數！');
+    }
+
     function updateTable() {
         const header = document.getElementById('tableHeader');
         header.innerHTML = "<th>局</th>" + PLAYERS.map(p => `<th>${p}</th>`).join("");
@@ -2091,8 +2176,18 @@
                 reject(e);
                 return;
             }
+
+            // 語音活動偵測（VAD）：講完話就提早停止錄音送出辨識，不用死等滿 maxMs 秒——
+            // 這是 Google STT 這條路「回應比較慢」的主因（瀏覽器內建辨識有自動偵測停頓，
+            // 只有這條固定錄音路徑沒有），偵測不到就退回原本固定秒數，不影響原本功能。
+            let stopTimer = null;
+            const stopEarly = () => { if (recorder.state !== 'inactive') recorder.stop(); };
+            const vad = setupSilenceDetector(stream, stopEarly);
+
             recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
             recorder.onstop = async () => {
+                clearTimeout(stopTimer);
+                if (vad) vad.stop();
                 stream.getTracks().forEach(t => t.stop());
                 try {
                     const blob = new Blob(chunks, { type: 'audio/webm' });
@@ -2100,18 +2195,69 @@
                     resolve(text);
                 } catch (e) { reject(e); }
             };
-            recorder.onerror = (e) => { stream.getTracks().forEach(t => t.stop()); reject(e); };
+            recorder.onerror = (e) => { clearTimeout(stopTimer); if (vad) vad.stop(); stream.getTracks().forEach(t => t.stop()); reject(e); };
             recorder.start();
-            setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, maxMs);
+            stopTimer = setTimeout(stopEarly, maxMs); // 保底：VAD偵測不到聲音時，還是會在maxMs後結束
         });
     }
 
-    // 唸一句話，唸完才 resolve（給狀態機排隊用，避免說話跟聽話互相打斷）
+    // 監聽麥克風音量，偵測到「講完話後安靜一段時間」就呼叫 onSilence 提早結束錄音；
+    // 拿不到 AudioContext（極少數瀏覽器）就直接不啟用，退回原本固定秒數等待，不影響功能。
+    function setupSilenceDetector(stream, onSilence) {
+        const Ctor = window.AudioContext || window.webkitAudioContext;
+        if (!Ctor) return null;
+        let ctx, analyser, source, raf;
+        try {
+            ctx = new Ctor();
+            analyser = ctx.createAnalyser();
+            analyser.fftSize = 512;
+            source = ctx.createMediaStreamSource(stream);
+            source.connect(analyser);
+        } catch (e) { return null; }
+
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const SPEECH_THRESHOLD = 12;  // 音量門檻（0~255，經驗值，太吵的環境可能要調高）
+        const SILENCE_MS = 600;       // 講完話後安靜超過這麼久，就當作講完了
+        const MIN_SPEECH_MS = 300;    // 至少偵測到這麼久的聲音才算真的有講話，濾掉雜訊瞬間
+        let hasSpoken = false, speechStart = null, silenceStart = null, stopped = false;
+
+        function tick() {
+            if (stopped) return;
+            analyser.getByteTimeDomainData(data);
+            let sumSq = 0;
+            for (let i = 0; i < data.length; i++) { const v = data[i] - 128; sumSq += v * v; }
+            const rms = Math.sqrt(sumSq / data.length);
+            const now = Date.now();
+            if (rms > SPEECH_THRESHOLD) {
+                if (speechStart === null) speechStart = now;
+                if (!hasSpoken && now - speechStart > MIN_SPEECH_MS) hasSpoken = true;
+                silenceStart = null;
+            } else if (hasSpoken) {
+                if (silenceStart === null) silenceStart = now;
+                else if (now - silenceStart > SILENCE_MS) { stopped = true; onSilence(); return; }
+            }
+            raf = requestAnimationFrame(tick);
+        }
+        raf = requestAnimationFrame(tick);
+
+        return {
+            stop() {
+                stopped = true;
+                if (raf) cancelAnimationFrame(raf);
+                try { source.disconnect(); } catch (e) {}
+                try { ctx.close(); } catch (e) {}
+            }
+        };
+    }
+
+    // 唸一句話，唸完才 resolve（給狀態機排隊用，避免說話跟聽話互相打斷）。
+    // rate 稍微加快一點（1.15倍速），縮短每次唸摘要/報戰績的等待時間，還算聽得清楚。
     function speakAsync(text) {
         return new Promise((resolve) => {
             if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { resolve(); return; }
             const utter = new SpeechSynthesisUtterance(text);
             utter.lang = 'zh-TW';
+            utter.rate = 1.15;
             utter.onend = resolve;
             utter.onerror = resolve;
             speechSynthesis.cancel();
