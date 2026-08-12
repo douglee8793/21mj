@@ -443,7 +443,7 @@
             <span class="mic-emoji">🎤</span>按這裡開始說話
         </button>
         <div id="voiceStatus" class="voice-status-big"></div>
-        <div class="voice-hint">說戰績 → 唸摘要 → 說「確認」或「取消」→ 自動送出並報比分</div>
+        <div class="voice-hint">說戰績 → 唸摘要 → 說「確認」或「取消」→ 自動送出<br>想聽總分時，說「播報戰績」</div>
     </div>
 
     <button class="save-session-btn" id="saveSessionBtn" onclick="openSaveModal()">💾 儲存本場紀錄到歷史資料庫</button>
@@ -2141,8 +2141,24 @@
         return null;
     }
 
-    // 按一次語音鈕，整段流程全自動跑完：聽戰績 → 唸摘要 → 聽確認 → 送出 → 報比分
-    // （也支援「自動換閒家開/關」這種設定指令，講完直接生效，不會進入戰績確認流程）
+    // 語音判斷是不是「播報戰績」指令——講出來就唸一次本場所有人目前的總勝負，
+    // 跟每局結束後的確認流程分開，平常確認不會自動報總分，要報就用這句話喊一下。
+    function parseBroadcastStandingsVoiceCommand(text) {
+        const hasVerb = text.includes('播報') || text.includes('報告') || text.includes('唸') || text.includes('報');
+        const hasTopic = findFuzzyKeywordPositions(text, '戰績').length > 0 || text.includes('比分') || text.includes('分數');
+        return hasVerb && hasTopic;
+    }
+
+    // 唸一次本場所有玩家目前的總勝負（不篩選，全部都唸）——「播報戰績」指令專用，
+    // 跟每局確認後的簡短「已送出」不同，那個只是回饋這局有記到，不會報總分。
+    async function announceStandings() {
+        const scoreText = PLAYERS.map(p => p + (totalScores[p] >= 0 ? ' 加 ' : ' 負 ') + Math.abs(totalScores[p])).join('，');
+        await speakAsync('本場目前戰績：' + scoreText);
+        return scoreText;
+    }
+
+    // 按一次語音鈕，整段流程全自動跑完：聽戰績 → 唸摘要 → 聽確認 → 送出
+    // （也支援「自動換閒家開/關」「播報戰績」這類指令，講完直接生效，不會進入戰績確認流程）
     async function startVoiceChatFlow() {
         if (voiceChatBusy) return;
         voiceChatBusy = true;
@@ -2158,6 +2174,12 @@
                 text = await listenOnce(7000);
             } catch (e) {
                 statusEl.textContent = '⚠️ ' + e.message;
+                return;
+            }
+
+            if (parseBroadcastStandingsVoiceCommand(text)) {
+                const scoreText = await announceStandings();
+                statusEl.innerHTML = '🗣️ 辨識到：「' + text + '」<br>📢 ' + scoreText;
                 return;
             }
 
@@ -2216,12 +2238,9 @@
 
         if (verdict === 'yes') {
             commitRoundResult(result.roundRes, result.winType);
-            // 只報這局有輸贏變化的人，沒下場、分數沒變的閒家不用唸
-            const scoreText = PLAYERS.filter(p => result.roundRes[p] !== 0)
-                .map(p => p + (totalScores[p] >= 0 ? ' 加 ' : ' 負 ') + Math.abs(totalScores[p]))
-                .join('，');
-            statusEl.innerHTML += '<br>✅ 已送出！';
-            await speakAsync('已送出。目前比分：' + scoreText);
+            // 確認後直接計入戰績即可，不用再唸總勝負——想聽總分時用語音說「播報戰績」
+            statusEl.innerHTML += '<br>✅ 已計入戰績';
+            await speakAsync('已送出');
         } else if (verdict === 'no') {
             resetSelections();
             renderPlayers();
