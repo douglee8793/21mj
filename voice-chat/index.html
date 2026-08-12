@@ -2242,11 +2242,11 @@
     // 語音判斷是不是「播報戰績」指令——講出來就唸一次本場所有人目前的總勝負，
     // 跟每局結束後的確認流程分開，平常確認不會自動報總分，要報就用這句話喊一下。
     function parseBroadcastStandingsVoiceCommand(text) {
-        // 動詞用比較完整的詞（不用單獨一個「報」或「唸」字），降低跟正常戰績語句誤判的機會
-        const hasVerb = text.includes('播報') || text.includes('報告') || text.includes('報一下')
-            || text.includes('唸一下') || text.includes('唸出') || text.includes('查一下');
-        const hasTopic = findFuzzyKeywordPositions(text, '戰績').length > 0 || text.includes('比分') || text.includes('分數');
-        return hasVerb && hasTopic;
+        // 只要句子裡有「戰績/比分/分數」這種主題詞就算是這個指令，不用另外比對「播報」
+        // 這個動詞——正常戰績語句（人名+胡/放炮/自摸+台數）完全不會出現這幾個字，
+        // 不會跟正常語句混淆；這樣「播報戰績」「播放戰績」（Google常誤判成這個）
+        // 「目前戰績」「戰績如何」…不管前面加什麼動詞或乾脆沒有動詞，都收得到。
+        return findFuzzyKeywordPositions(text, '戰績').length > 0 || text.includes('比分') || text.includes('分數');
     }
 
     // 唸一次本場所有玩家目前的總勝負（不篩選，全部都唸）——「播報戰績」指令專用，
