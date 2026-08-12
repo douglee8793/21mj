@@ -386,6 +386,25 @@
         .manual-correct[open] summary::before { content: '▾ '; }
         .manual-correct[open] summary { color: #673ab7; font-weight: bold; }
 
+        /* ── 常駐狀態列：閒家跟自動換閒家開關，隨時看得到，不用打開手動更正 ── */
+        .game-status-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px 16px;
+            background: #ede7f6;
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .status-item { display: flex; align-items: center; gap: 8px; }
+        .status-label { font-weight: bold; color: #555; white-space: nowrap; }
+        .status-select { font-size: 16px; padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc; }
+        .toggle-item { cursor: pointer; font-weight: bold; color: #555; user-select: none; }
+        .toggle-item input { width: 20px; height: 20px; vertical-align: middle; margin-right: 4px; }
+
         .emoji-lg { font-size: 1.5em; }
         .history-section h3 { font-size: 17px; }
         table { font-size: 15px; }
@@ -405,6 +424,17 @@
             <button class="icon-btn" onclick="openHistoryPanel()">📊 歷史</button>
             <button class="icon-btn" onclick="openTokenModal()">⚙️</button>
         </div>
+    </div>
+
+    <!-- 常駐狀態：目前誰是閒家（沒下場的）、自動換閒家有沒有開，隨時看得到 -->
+    <div class="game-status-bar">
+        <div class="status-item">
+            <span class="status-label">目前閒家</span>
+            <select id="idleSelect" onchange="assignSeats()" class="status-select"></select>
+        </div>
+        <label class="toggle-item">
+            <input type="checkbox" id="autoRotate" checked>自動換閒家
+        </label>
     </div>
 
     <!-- 全語音互動的核心：說話就好，畫面只負責唸給你聽的內容跟目前比分 -->
@@ -442,10 +472,6 @@
                 <input type="number" id="maxTai" value="30">
             </div>
             <div class="control-group">
-                <label>目前閒家(不打)</label>
-                <select id="idleSelect" onchange="assignSeats()"></select>
-            </div>
-            <div class="control-group">
                 <label>勝負方式</label>
                 <select id="winType" onchange="resetSelections(); renderPlayers();">
                     <option value="0">放炮</option>
@@ -453,7 +479,6 @@
                 </select>
             </div>
             <div class="toggle-group">
-                <label><input type="checkbox" id="autoRotate" checked> 自動換閒家</label>
                 <label><input type="checkbox" id="flowerEnabled" onchange="renderPlayers()"> 插花功能</label>
             </div>
         </div>
@@ -2105,7 +2130,19 @@
 
     let voiceChatBusy = false; // 避免整個對話流程進行中又被重複觸發
 
+    // 語音判斷是不是「自動換閒家 開/關」這種控制指令，不是的話回傳 null，交給正常戰績解析。
+    // 句子裡要先出現「閒家」或「自動換」這個主題詞，再看有沒有「開」或「關」，
+    // 兩個都沒有就當作不是在講這件事（避免隨便一句話裡剛好有「開」字就誤觸發）。
+    function parseAutoRotateVoiceCommand(text) {
+        const hasTopic = findFuzzyKeywordPositions(text, '閒家').length > 0 || text.includes('自動換');
+        if (!hasTopic) return null;
+        if (text.includes('關')) return 'off';
+        if (text.includes('開')) return 'on';
+        return null;
+    }
+
     // 按一次語音鈕，整段流程全自動跑完：聽戰績 → 唸摘要 → 聽確認 → 送出 → 報比分
+    // （也支援「自動換閒家開/關」這種設定指令，講完直接生效，不會進入戰績確認流程）
     async function startVoiceChatFlow() {
         if (voiceChatBusy) return;
         voiceChatBusy = true;
@@ -2123,6 +2160,16 @@
                 statusEl.textContent = '⚠️ ' + e.message;
                 return;
             }
+
+            const autoRotateCmd = parseAutoRotateVoiceCommand(text);
+            if (autoRotateCmd) {
+                const cb = document.getElementById('autoRotate');
+                cb.checked = (autoRotateCmd === 'on');
+                statusEl.innerHTML = '🗣️ 辨識到：「' + text + '」<br>✅ 自動換閒家已' + (cb.checked ? '開啟' : '關閉');
+                await speakAsync('自動換閒家已' + (cb.checked ? '開啟' : '關閉'));
+                return;
+            }
+
             const parsed = parseVoiceCommand(text);
             const applied = applyParsedResult(parsed);
             let msg = '🗣️ 辨識到：「' + text + '」<br>';
@@ -2169,7 +2216,10 @@
 
         if (verdict === 'yes') {
             commitRoundResult(result.roundRes, result.winType);
-            const scoreText = PLAYERS.map(p => p + (totalScores[p] >= 0 ? ' 加 ' : ' 負 ') + Math.abs(totalScores[p])).join('，');
+            // 只報這局有輸贏變化的人，沒下場、分數沒變的閒家不用唸
+            const scoreText = PLAYERS.filter(p => result.roundRes[p] !== 0)
+                .map(p => p + (totalScores[p] >= 0 ? ' 加 ' : ' 負 ') + Math.abs(totalScores[p]))
+                .join('，');
             statusEl.innerHTML += '<br>✅ 已送出！';
             await speakAsync('已送出。目前比分：' + scoreText);
         } else if (verdict === 'no') {
