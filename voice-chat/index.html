@@ -2152,6 +2152,10 @@
         });
     }
 
+    // Google STT 錄音：固定錄滿 maxMs 秒再送出辨識（跟正式版「按一次錄音、按一次結束」
+    // 送出去辨識的方式一樣可靠，只是換成自動結束，不會手動提早切斷句子）。
+    // 註：之前這裡加過語音活動偵測（VAD）想加速，但實測辨識率反而變差，已經移除，
+    // 改回這種最單純、最不容易出錯的固定秒數方式，穩定優先於速度。
     function listenOnceGoogle(maxMs) {
         return new Promise(async (resolve, reject) => {
             if (!navigator.mediaDevices || !window.MediaRecorder) {
@@ -2177,17 +2181,8 @@
                 return;
             }
 
-            // 語音活動偵測（VAD）：講完話就提早停止錄音送出辨識，不用死等滿 maxMs 秒——
-            // 這是 Google STT 這條路「回應比較慢」的主因（瀏覽器內建辨識有自動偵測停頓，
-            // 只有這條固定錄音路徑沒有），偵測不到就退回原本固定秒數，不影響原本功能。
-            let stopTimer = null;
-            const stopEarly = () => { if (recorder.state !== 'inactive') recorder.stop(); };
-            const vad = setupSilenceDetector(stream, stopEarly);
-
             recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
             recorder.onstop = async () => {
-                clearTimeout(stopTimer);
-                if (vad) vad.stop();
                 stream.getTracks().forEach(t => t.stop());
                 try {
                     const blob = new Blob(chunks, { type: 'audio/webm' });
@@ -2195,60 +2190,10 @@
                     resolve(text);
                 } catch (e) { reject(e); }
             };
-            recorder.onerror = (e) => { clearTimeout(stopTimer); if (vad) vad.stop(); stream.getTracks().forEach(t => t.stop()); reject(e); };
+            recorder.onerror = (e) => { stream.getTracks().forEach(t => t.stop()); reject(e); };
             recorder.start();
-            stopTimer = setTimeout(stopEarly, maxMs); // 保底：VAD偵測不到聲音時，還是會在maxMs後結束
+            setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, maxMs);
         });
-    }
-
-    // 監聽麥克風音量，偵測到「講完話後安靜一段時間」就呼叫 onSilence 提早結束錄音；
-    // 拿不到 AudioContext（極少數瀏覽器）就直接不啟用，退回原本固定秒數等待，不影響功能。
-    function setupSilenceDetector(stream, onSilence) {
-        const Ctor = window.AudioContext || window.webkitAudioContext;
-        if (!Ctor) return null;
-        let ctx, analyser, source, raf;
-        try {
-            ctx = new Ctor();
-            analyser = ctx.createAnalyser();
-            analyser.fftSize = 512;
-            source = ctx.createMediaStreamSource(stream);
-            source.connect(analyser);
-        } catch (e) { return null; }
-
-        const data = new Uint8Array(analyser.frequencyBinCount);
-        const SPEECH_THRESHOLD = 12;  // 音量門檻（0~255，經驗值，太吵的環境可能要調高）
-        const SILENCE_MS = 1200;      // 講完話後安靜超過這麼久，才當作講完了——寧可等久一點，
-                                       // 也不要把一句話中間正常的換氣停頓誤判成講完，切斷還沒講完的句子
-        const MIN_SPEECH_MS = 300;    // 至少偵測到這麼久的聲音才算真的有講話，濾掉雜訊瞬間
-        let hasSpoken = false, speechStart = null, silenceStart = null, stopped = false;
-
-        function tick() {
-            if (stopped) return;
-            analyser.getByteTimeDomainData(data);
-            let sumSq = 0;
-            for (let i = 0; i < data.length; i++) { const v = data[i] - 128; sumSq += v * v; }
-            const rms = Math.sqrt(sumSq / data.length);
-            const now = Date.now();
-            if (rms > SPEECH_THRESHOLD) {
-                if (speechStart === null) speechStart = now;
-                if (!hasSpoken && now - speechStart > MIN_SPEECH_MS) hasSpoken = true;
-                silenceStart = null;
-            } else if (hasSpoken) {
-                if (silenceStart === null) silenceStart = now;
-                else if (now - silenceStart > SILENCE_MS) { stopped = true; onSilence(); return; }
-            }
-            raf = requestAnimationFrame(tick);
-        }
-        raf = requestAnimationFrame(tick);
-
-        return {
-            stop() {
-                stopped = true;
-                if (raf) cancelAnimationFrame(raf);
-                try { source.disconnect(); } catch (e) {}
-                try { ctx.close(); } catch (e) {}
-            }
-        };
     }
 
     // 唸一句話，唸完才 resolve（給狀態機排隊用，避免說話跟聽話互相打斷）。
