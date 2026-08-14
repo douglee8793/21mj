@@ -471,7 +471,7 @@
             <span class="mic-emoji">🎤</span>按這裡開始說話
         </button>
         <div id="voiceStatus" class="voice-status-big"></div>
-        <div class="voice-hint">說戰績 → 唸摘要 → 說「確認」或「取消」→ 自動送出<br>想聽總分時，說「播報戰績」</div>
+        <div class="voice-hint">說戰績 → 唸摘要 → 說「確認」或「取消」→ 自動送出<br>缺什麼會直接問你（例如「胡家是誰？」），不用整句重講<br>想聽總分時，說「播報戰績」</div>
     </div>
 
     <button class="save-session-btn" id="saveSessionBtn" onclick="openSaveModal()">💾 儲存本場紀錄到歷史資料庫</button>
@@ -2270,6 +2270,143 @@
         return scoreText;
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // 缺什麼就追問什麼：辨識完一整句後，如果模式/胡家/放炮人/自摸人/台數
+    // 有任何一項沒聽清楚，不用整句重講，只針對缺的那一項追問，比對回答補齊，
+    // 全部補齊後才進入摘要確認。這樣單一項沒聽清楚不會浪費前面已經聽對的部分。
+    // ══════════════════════════════════════════════════════════════════════
+
+    // 判斷目前解析結果還缺哪一項必要資訊；回傳 null 代表資訊齊全，可以進入確認流程了。
+    function nextMissingSlot(parsed) {
+        if (!parsed.mode) return 'mode';
+        if (parsed.mode === 'pao') {
+            if (parsed.huIdx === null) return 'hu';
+            if (parsed.paoIdx === null) return 'pao';
+        } else {
+            if (parsed.zimoIdx === null) return 'zimo';
+        }
+        if (parsed.tai === null) return 'tai';
+        return null;
+    }
+
+    const SLOT_QUESTIONS = {
+        mode: '這局是放炮還是自摸？',
+        hu: '胡家是誰？',
+        pao: '放炮的是誰？',
+        zimo: '自摸的是誰？',
+        tai: '台數是多少？',
+    };
+
+    // 從一句簡短回答（只回一個玩家名字）裡找出最像的玩家——先看有沒有完全對上的名字，
+    // 講到超過一個人就當作聽不清楚（無法判斷指哪一個）；沒有精確對上的話，
+    // 才逐字用拼音容錯掃描整句找最像的一個（跟 findNearestPlayer 同一套 charSimilar 邏輯，
+    // 只是這裡不需要關鍵字錨點，因為整句本來就只回一個名字）。
+    function findPlayerInShortReply(text) {
+        const mentions = findPlayerMentions(text);
+        if (mentions.length === 1) return mentions[0].idx;
+        if (mentions.length > 1) return null;
+
+        let best = null;
+        PLAYERS.forEach((name, idx) => {
+            for (let i = 0; i <= text.length - name.length; i++) {
+                const chunk = text.slice(i, i + name.length);
+                let matches = 0;
+                for (let k = 0; k < name.length; k++) if (charSimilar(chunk[k], name[k])) matches++;
+                const quality = matches / name.length;
+                if (quality < 0.66) continue;
+                if (!best || quality > best.quality) best = { idx, quality };
+            }
+        });
+        return best ? best.idx : null;
+    }
+
+    // 從簡短回答裡找台數，不管有沒有講「台」字都要能抓到（追問時使用者常常只回「三」）
+    function findTaiInShortReply(text) {
+        const norm = normalizeVoiceNumbers(text + '台');
+        let m = norm.match(/(\d+)台/);
+        if (m) return parseInt(m[1], 10);
+        m = text.match(/(\d+)/);
+        return m ? parseInt(m[1], 10) : null;
+    }
+
+    // 從簡短回答裡判斷是放炮還是自摸；兩個都講到或都沒講到就當作聽不清楚
+    function findModeInShortReply(text) {
+        const isZimo = findFuzzyKeywordPositions(text, '自摸').length > 0;
+        const isPao = findFuzzyKeywordPositions(text, '放炮').length > 0 || findHuKeywordPositions(text).length > 0;
+        if (isZimo && !isPao) return 'zimo';
+        if (isPao && !isZimo) return 'pao';
+        return null;
+    }
+
+    function parseSlotAnswer(slot, text) {
+        const norm = String(text || '').replace(/[，,。、\s]/g, '');
+        if (slot === 'mode') return findModeInShortReply(norm);
+        if (slot === 'tai') return findTaiInShortReply(norm);
+        return findPlayerInShortReply(norm); // hu / pao / zimo 都是要抓一個玩家名字
+    }
+
+    function applySlotAnswer(parsed, slot, value) {
+        if (slot === 'mode') parsed.mode = value;
+        else if (slot === 'hu') parsed.huIdx = value;
+        else if (slot === 'pao') parsed.paoIdx = value;
+        else if (slot === 'zimo') parsed.zimoIdx = value;
+        else if (slot === 'tai') parsed.tai = value;
+    }
+
+    const SLOT_FILL_MAX_ATTEMPTS = 6; // 保底上限，避免一直聽不到答案時卡住畫面
+
+    // 資訊不齊全時一項一項追問，缺什麼問什麼；每補齊一項就馬上更新畫面（套用到按鈕/輸入框），
+    // 讓你看得到目前狀態。全部補齊才回傳 true 進入摘要確認；問到上限還是不行就回傳 false，
+    // 交回手動操作（畫面上的按鈕跟輸入框已經套用了目前為止聽到的部分，不用從頭來）。
+    async function runSlotFillingLoop(parsed, statusEl) {
+        let attempts = 0;
+        let slot = nextMissingSlot(parsed);
+        while (slot && attempts < SLOT_FILL_MAX_ATTEMPTS) {
+            attempts++;
+            const question = SLOT_QUESTIONS[slot];
+            statusEl.innerHTML += '<br>🎙️ ' + question;
+            await speakAsync(question);
+            await sleep(POST_SPEAK_PAUSE_MS);
+
+            let answerText;
+            try {
+                answerText = await listenOnce(slot === 'hu' || slot === 'pao' || slot === 'zimo' ? 5000 : 4000);
+            } catch (e) {
+                if (isUnrecoverableListenError(e)) {
+                    statusEl.innerHTML += '<br>⚠️ ' + e.message + '（請改用畫面按鈕輸入）';
+                    return false;
+                }
+                statusEl.innerHTML += '<br>（沒聽到聲音，再問一次）';
+                continue;
+            }
+            statusEl.innerHTML += '<br>🗣️ 聽到：「' + answerText + '」';
+
+            const value = parseSlotAnswer(slot, answerText);
+            if (value === null) {
+                statusEl.innerHTML += '<br>還是聽不清楚，再說一次';
+                await speakAsync('沒聽清楚，再說一次');
+                continue;
+            }
+            if ((slot === 'hu' || slot === 'pao' || slot === 'zimo') && value === idleIndex) {
+                const roleWord = slot === 'zimo' ? '自摸' : (slot === 'hu' ? '胡牌' : '放炮');
+                statusEl.innerHTML += '<br>⚠️ ' + PLAYERS[value] + ' 目前是閒家，不能' + roleWord;
+                await speakAsync(PLAYERS[value] + ' 目前是閒家，請講別的人');
+                continue;
+            }
+
+            applySlotAnswer(parsed, slot, value);
+            applyParsedResult(parsed);
+            slot = nextMissingSlot(parsed);
+        }
+
+        if (slot) {
+            statusEl.innerHTML += '<br>⚠️ 問太多次還是沒問到齊全的資訊，請改用畫面按鈕輸入';
+            await speakAsync('沒辦法問到完整的資訊，請直接用畫面按鈕輸入');
+            return false;
+        }
+        return true;
+    }
+
     // 按一次語音鈕，整段流程全自動跑完：聽戰績 → 唸摘要 → 聽確認 → 送出
     // （也支援「自動換閒家開/關」「播報戰績」這類指令，講完直接生效，不會進入戰績確認流程）
     async function startVoiceChatFlow() {
@@ -2306,17 +2443,18 @@
             }
 
             const parsed = parseVoiceCommand(text);
-            const applied = applyParsedResult(parsed);
-            let msg = '🗣️ 辨識到：「' + text + '」<br>';
-            if (!applied) {
-                msg += '<span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
-                statusEl.innerHTML = msg;
-                await speakAsync('沒聽懂，請重新說一次');
-                return;
+            applyParsedResult(parsed); // 解析到多少先套用多少，缺的欄位留給下面一項一項追問
+            statusEl.innerHTML = '🗣️ 辨識到：「' + text + '」';
+
+            if (nextMissingSlot(parsed)) {
+                const complete = await runSlotFillingLoop(parsed, statusEl);
+                if (!complete) return;
+            } else if (parsed.warnings.length) {
+                // 資訊本來就齊全，但解析器還是留了警告（例如插花對象聽不清楚之類的次要提醒）
+                statusEl.innerHTML += '<br><span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
             }
-            msg += '→ ' + describeParsedResult(parsed);
-            if (parsed.warnings.length) msg += '<br><span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
-            statusEl.innerHTML = msg;
+
+            statusEl.innerHTML += '<br>→ ' + describeParsedResult(parsed);
 
             await runVoiceConfirmationLoop(statusEl);
         } finally {
