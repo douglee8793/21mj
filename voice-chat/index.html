@@ -2141,12 +2141,15 @@
     // 把語音辨識包成 Promise，聽一句話就結束（不管底層是瀏覽器內建還是 Google STT）。
     // maxMs 只影響 Google 那條路（沒有自動偵測停頓的能力，只能錄固定秒數）；
     // 瀏覽器內建那條路會在偵測到停頓時自動結束，比較準。
-    function listenOnce(maxMs) {
-        if (getGoogleSttKey()) return listenOnceGoogle(maxMs || 6000);
-        return listenOnceBrowser();
+    // onReady：麥克風真的開始收音時才呼叫——UI 要等這個訊號才顯示「請說」，
+    // 不然畫面顯示可以講話時，錄音其實還在啟動中（getUserMedia/MediaRecorder
+    // 都需要時間），使用者一開口，第一個字就被吃掉沒錄到，難怪常常是第一個字辨識最差。
+    function listenOnce(maxMs, onReady) {
+        if (getGoogleSttKey()) return listenOnceGoogle(maxMs || 6000, onReady);
+        return listenOnceBrowser(onReady);
     }
 
-    function listenOnceBrowser() {
+    function listenOnceBrowser(onReady) {
         return new Promise((resolve, reject) => {
             const Ctor = getSpeechRecognitionCtor();
             if (!Ctor) {
@@ -2158,6 +2161,7 @@
             r.interimResults = false;
             r.maxAlternatives = 1;
             let settled = false;
+            r.onstart = () => { if (onReady) onReady(); }; // 辨識服務真的準備好、開始收音了
             r.onresult = (e) => { settled = true; resolve(e.results[0][0].transcript); };
             r.onerror = (e) => { if (!settled) { settled = true; reject(new Error('辨識失敗（' + e.error + '）')); } };
             r.onend = () => { if (!settled) { settled = true; reject(new Error('沒聽到聲音，請再試一次')); } };
@@ -2169,7 +2173,7 @@
     // 送出去辨識的方式一樣可靠，只是換成自動結束，不會手動提早切斷句子）。
     // 註：之前這裡加過語音活動偵測（VAD）想加速，但實測辨識率反而變差，已經移除，
     // 改回這種最單純、最不容易出錯的固定秒數方式，穩定優先於速度。
-    function listenOnceGoogle(maxMs) {
+    function listenOnceGoogle(maxMs, onReady) {
         return new Promise(async (resolve, reject) => {
             if (!navigator.mediaDevices || !window.MediaRecorder) {
                 reject(new Error('這個瀏覽器不支援錄音功能，請改用 Chrome。'));
@@ -2205,6 +2209,9 @@
             };
             recorder.onerror = (e) => { stream.getTracks().forEach(t => t.stop()); reject(e); };
             recorder.start();
+            // 錄音器啟動後留一點緩衝時間再通知「可以講了」，讓麥克風/編碼器先穩定，
+            // 避免使用者一聽到提示就馬上開口，反而錄到還在暖機、品質不穩的開頭片段
+            if (onReady) setTimeout(onReady, 250);
             setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, maxMs);
         });
     }
@@ -2370,7 +2377,10 @@
 
             let answerText;
             try {
-                answerText = await listenOnce(slot === 'hu' || slot === 'pao' || slot === 'zimo' ? 5000 : 4000);
+                answerText = await listenOnce(
+                    slot === 'hu' || slot === 'pao' || slot === 'zimo' ? 5000 : 4000,
+                    () => { statusEl.innerHTML += '<br>🎙️ （可以講了）'; }
+                );
             } catch (e) {
                 if (isUnrecoverableListenError(e)) {
                     statusEl.innerHTML += '<br>⚠️ ' + e.message + '（請改用畫面按鈕輸入）';
@@ -2417,11 +2427,14 @@
         btn.disabled = true;
         setMainActionEnabled(false);
         try {
-            btn.innerHTML = '<span class="mic-emoji">🎙️</span>聆聽中…';
-            statusEl.textContent = '🎙️ 請說戰績，例如：「戴志清放炮，李中禕胡，三台」';
+            btn.innerHTML = '<span class="mic-emoji">🎙️</span>準備中…';
+            statusEl.textContent = '🎙️ 準備聆聽…';
             let text;
             try {
-                text = await listenOnce(7000);
+                text = await listenOnce(7000, () => {
+                    btn.innerHTML = '<span class="mic-emoji">🎙️</span>聆聽中…';
+                    statusEl.textContent = '🎙️ 請說戰績，例如：「戴志清放炮，李中禕胡，三台」';
+                });
             } catch (e) {
                 statusEl.textContent = '⚠️ ' + e.message;
                 return;
@@ -2445,13 +2458,15 @@
             const parsed = parseVoiceCommand(text);
             applyParsedResult(parsed); // 解析到多少先套用多少，缺的欄位留給下面一項一項追問
             statusEl.innerHTML = '🗣️ 辨識到：「' + text + '」';
+            // 原句解析留下的警告（例如「高玉川目前是閒家，不能放炮」）一定要先讓你看到，
+            // 不然等一下追問「放炮的是誰？」時你還是會講同一個名字，卻不知道為什麼一直不算數
+            if (parsed.warnings.length) {
+                statusEl.innerHTML += '<br><span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
+            }
 
             if (nextMissingSlot(parsed)) {
                 const complete = await runSlotFillingLoop(parsed, statusEl);
                 if (!complete) return;
-            } else if (parsed.warnings.length) {
-                // 資訊本來就齊全，但解析器還是留了警告（例如插花對象聽不清楚之類的次要提醒）
-                statusEl.innerHTML += '<br><span style="color:#e65100;">⚠️ ' + parsed.warnings.join('；') + '</span>';
             }
 
             statusEl.innerHTML += '<br>→ ' + describeParsedResult(parsed);
@@ -2494,12 +2509,13 @@
         }
         await speakAsync(result.spokenSummary);
         await sleep(POST_SPEAK_PAUSE_MS);
-        statusEl.innerHTML += '<br>🎙️ 請說「確認」或「取消」…';
 
         for (let attempt = 1; attempt <= CONFIRM_LISTEN_MAX_ATTEMPTS; attempt++) {
             let answerText;
             try {
-                answerText = await listenOnce(3000);
+                answerText = await listenOnce(3000, () => {
+                    statusEl.innerHTML += '<br>🎙️ 請說「確認」或「取消」…';
+                });
             } catch (e) {
                 if (isUnrecoverableListenError(e)) {
                     statusEl.innerHTML += '<br>⚠️ ' + e.message + '（請改用畫面按鈕確認）';
@@ -2527,7 +2543,6 @@
             } else {
                 await speakAsync('沒聽清楚，請說確認或取消');
                 await sleep(POST_SPEAK_PAUSE_MS);
-                statusEl.innerHTML += '<br>🎙️ 請再說一次「確認」或「取消」…';
             }
         }
 
