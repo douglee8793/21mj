@@ -660,14 +660,11 @@
     // ── Constants ──
     const PLAYERS = ["高玉川", "李中禕", "周樹偉", "詹偉凱", "戴志清"];
     const REPO = "douglee8793/21mj";
-    // ⚠️ 全語音對話測試版：與正式版共用同一組加密 Token/config.json，但歷史/草稿資料
-    // 刻意指向獨立的測試檔案，避免測試期間的紀錄污染正式的 history.json
-    const HISTORY_FILE = "history-voice-chat-test.json";
+    // 全語音對話版：與正式版共用同一份歷史資料庫（history.json），兩邊都可以直接讀寫，
+    // 語音記下來的場次會直接算進正式版統計。「進行中場次」草稿仍用獨立檔案（見下面
+    // DRAFT_FILE），避免正式版跟語音版同時開著各自的場次時，互相覆蓋掉彼此還沒存檔的草稿。
+    const HISTORY_FILE = "history.json";
     const API_BASE = "https://api.github.com/repos/" + REPO + "/contents/" + HISTORY_FILE;
-    // 「歷史」面板只做「查看」串到正式版真實資料（唯讀），本頁新記錄的場次
-    // 還是寫進上面那個獨立測試檔，兩邊資料不會混在一起
-    const REAL_HISTORY_FILE = "history.json";
-    const REAL_HISTORY_API = "https://api.github.com/repos/" + REPO + "/contents/" + REAL_HISTORY_FILE;
 
     // ── Game state ──
     let idleIndex = 0;
@@ -682,6 +679,9 @@
     let historyData = null;
 
     // ── In-progress session draft (crash / device-switch recovery) ──
+    // 刻意跟正式版用不同的草稿檔（正式版是 draft.json），這是特意保留的設計，
+    // 不是測試殘留：這樣正式版跟語音版才能同時各自進行不同場次，不會互相打架、
+    // 蓋掉對方還沒存檔的紀錄。已存檔的正式結果（history.json）則是兩邊共用。
     const DRAFT_FILE = "draft-voice-chat-test.json";
     const DRAFT_API = "https://api.github.com/repos/" + REPO + "/contents/" + DRAFT_FILE;
     const DRAFT_LS_KEY = "mj_draft";
@@ -869,14 +869,6 @@
     // ── GitHub API ──
     async function fetchHistory() {
         const res = await fetch(API_BASE + '?t=' + Date.now());
-        if (!res.ok) throw new Error('無法讀取歷史資料');
-        const json = await res.json();
-        return { data: b64Decode(json.content), sha: json.sha };
-    }
-
-    // 讀正式版真正的 history.json（唯讀，不會寫入）——只給「歷史」面板查看用
-    async function fetchRealHistory() {
-        const res = await fetch(REAL_HISTORY_API + '?t=' + Date.now());
         if (!res.ok) throw new Error('無法讀取歷史資料');
         const json = await res.json();
         return { data: b64Decode(json.content), sha: json.sha };
@@ -1125,10 +1117,10 @@
         body.innerHTML = '<div class="loading-msg">載入中…</div>';
         try {
             if (!historyData) {
-                const { data } = await fetchRealHistory();
+                const { data } = await fetchHistory();
                 historyData = data;
             }
-            const note = '<div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:8px;padding:8px 12px;font-size:12px;color:#1565c0;margin-bottom:12px;">📖 這裡顯示的是正式版真實的歷史場次（唯讀）。本頁新記錄的場次會存到獨立測試檔，不會寫進這份正式資料。</div>';
+            const note = '<div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:8px 12px;font-size:12px;color:#2e7d32;margin-bottom:12px;">✅ 已跟正式版共用同一份歷史資料庫，這裡看到、記錄的都是正式資料。</div>';
             if (currentTab === 'sessions') { renderSessions(historyData.sessions); body.insertAdjacentHTML('afterbegin', note); }
             else { renderStats(historyData.sessions); body.insertAdjacentHTML('afterbegin', note); }
         } catch (e) {
