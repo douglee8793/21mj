@@ -1120,9 +1120,8 @@
                 const { data } = await fetchHistory();
                 historyData = data;
             }
-            const note = '<div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:8px 12px;font-size:12px;color:#2e7d32;margin-bottom:12px;">✅ 已跟正式版共用同一份歷史資料庫，這裡看到、記錄的都是正式資料。</div>';
-            if (currentTab === 'sessions') { renderSessions(historyData.sessions); body.insertAdjacentHTML('afterbegin', note); }
-            else { renderStats(historyData.sessions); body.insertAdjacentHTML('afterbegin', note); }
+            if (currentTab === 'sessions') { renderSessions(historyData.sessions); }
+            else { renderStats(historyData.sessions); }
         } catch (e) {
             body.innerHTML = '<div class="loading-msg">⚠️ ' + e.message + '</div>';
         }
