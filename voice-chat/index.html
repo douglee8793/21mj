@@ -2297,10 +2297,16 @@
         if (parsed.mode === 'pao') {
             if (parsed.huIdx === null) return 'hu';
             if (parsed.paoIdx === null) return 'pao';
-        } else {
-            if (parsed.zimoIdx === null) return 'zimo';
+            if (parsed.tai === null) return 'tai';
+            return null;
         }
+        // 自摸模式：除了自摸的人跟台數，莊家是誰也是必要資訊——莊家自摸的話，
+        // 台數已經包含莊家加成，不用再多問；但如果自摸的不是莊家，莊家還要
+        // 另外加台，這項資訊沒問到，這局金額就會少算（漏掉莊家該多輸的部分）。
+        if (parsed.zimoIdx === null) return 'zimo';
         if (parsed.tai === null) return 'tai';
+        if (parsed.dealerIdx === null) return 'dealer';
+        if (parsed.dealerIdx !== parsed.zimoIdx && parsed.extraTai === null) return 'extraTai';
         return null;
     }
 
@@ -2310,6 +2316,8 @@
         pao: '放炮的是誰？',
         zimo: '自摸的是誰？',
         tai: '台數是多少？',
+        dealer: '莊家是誰？',
+        extraTai: '莊家要加幾台？',
     };
 
     // 從一句簡短回答（只回一個玩家名字）裡找出最像的玩家——先看有沒有完全對上的名字，
@@ -2356,8 +2364,8 @@
     function parseSlotAnswer(slot, text) {
         const norm = String(text || '').replace(/[，,。、\s]/g, '');
         if (slot === 'mode') return findModeInShortReply(norm);
-        if (slot === 'tai') return findTaiInShortReply(norm);
-        return findPlayerInShortReply(norm); // hu / pao / zimo 都是要抓一個玩家名字
+        if (slot === 'tai' || slot === 'extraTai') return findTaiInShortReply(norm);
+        return findPlayerInShortReply(norm); // hu / pao / zimo / dealer 都是要抓一個玩家名字
     }
 
     function applySlotAnswer(parsed, slot, value) {
@@ -2366,9 +2374,14 @@
         else if (slot === 'pao') parsed.paoIdx = value;
         else if (slot === 'zimo') parsed.zimoIdx = value;
         else if (slot === 'tai') parsed.tai = value;
+        else if (slot === 'dealer') parsed.dealerIdx = value;
+        else if (slot === 'extraTai') parsed.extraTai = value;
     }
 
-    const SLOT_FILL_MAX_ATTEMPTS = 6; // 保底上限，避免一直聽不到答案時卡住畫面
+    // 保底上限，避免一直聽不到答案時卡住畫面。這個上限是「整段追問流程」共用的總嘗試次數，
+    // 不是每一項各自的次數——自摸模式最多可能要問到5項（模式/自摸/台數/莊家/莊家加台），
+    // 所以上限要留夠每項至少能重問一次的空間，不能設太小。
+    const SLOT_FILL_MAX_ATTEMPTS = 10;
 
     // 資訊不齊全時一項一項追問，缺什麼問什麼；每補齊一項就馬上更新畫面（套用到按鈕/輸入框），
     // 讓你看得到目前狀態。全部補齊才回傳 true 進入摘要確認；問到上限還是不行就回傳 false，
@@ -2386,7 +2399,7 @@
             let answerText;
             try {
                 answerText = await listenOnce(
-                    slot === 'hu' || slot === 'pao' || slot === 'zimo' ? 5000 : 4000,
+                    slot === 'hu' || slot === 'pao' || slot === 'zimo' || slot === 'dealer' ? 5000 : 4000,
                     () => { statusEl.innerHTML += '<br>🎙️ （可以講了）'; }
                 );
             } catch (e) {
@@ -2413,8 +2426,8 @@
                 await speakAsync('沒聽清楚，再說一次');
                 continue;
             }
-            if ((slot === 'hu' || slot === 'pao' || slot === 'zimo') && value === idleIndex) {
-                const roleWord = slot === 'zimo' ? '自摸' : (slot === 'hu' ? '胡牌' : '放炮');
+            if ((slot === 'hu' || slot === 'pao' || slot === 'zimo' || slot === 'dealer') && value === idleIndex) {
+                const roleWord = slot === 'zimo' ? '自摸' : (slot === 'hu' ? '胡牌' : (slot === 'pao' ? '放炮' : '當莊家'));
                 statusEl.innerHTML += '<br>⚠️ ' + PLAYERS[value] + ' 目前是閒家，不能' + roleWord;
                 await speakAsync(PLAYERS[value] + ' 目前是閒家，請講別的人');
                 continue;
