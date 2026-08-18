@@ -2247,6 +2247,15 @@
 
     let voiceChatBusy = false; // 避免整個對話流程進行中又被重複觸發
 
+    // 任何時候講「取消」都可以打斷目前的語音流程——不管是還沒辨識完戰績、
+    // 追問缺項中、還是等確認，都算數。跟其他主題詞一樣用拼音容錯比對，
+    // 避免「取消」被聽成「去消」之類的近音字反而抓不到。
+    // （確認/取消那一步本來就有自己更嚴謹的是非分類 classifyConfirmation，
+    // 這裡只補其他原本沒有取消入口的地方：一開始聽戰績、追問缺項的時候。）
+    function isCancelCommand(text) {
+        return findFuzzyKeywordPositions(text, '取消').length > 0;
+    }
+
     // 語音判斷是不是「自動換閒家 開/關」這種控制指令，不是的話回傳 null，交給正常戰績解析。
     // 句子裡要先出現「閒家」或「自動換」這個主題詞，再看有沒有「開」或「關」，
     // 兩個都沒有就當作不是在講這件事（避免隨便一句話裡剛好有「開」字就誤觸發）。
@@ -2390,6 +2399,14 @@
             }
             statusEl.innerHTML += '<br>🗣️ 聽到：「' + answerText + '」';
 
+            if (isCancelCommand(answerText)) {
+                resetSelections();
+                renderPlayers();
+                statusEl.innerHTML += '<br>已取消，請重新輸入';
+                await speakAsync('好，已取消');
+                return false;
+            }
+
             const value = parseSlotAnswer(slot, answerText);
             if (value === null) {
                 statusEl.innerHTML += '<br>還是聽不清楚，再說一次';
@@ -2436,6 +2453,14 @@
                 });
             } catch (e) {
                 statusEl.textContent = '⚠️ ' + e.message;
+                return;
+            }
+
+            if (isCancelCommand(text)) {
+                resetSelections();
+                renderPlayers();
+                statusEl.innerHTML = '🗣️ 辨識到：「' + text + '」<br>已取消';
+                await speakAsync('好，已取消');
                 return;
             }
 
