@@ -349,6 +349,15 @@
 
         /* ── 語音主控台：全語音互動下畫面的重點，字放大、按鈕變唯一入口 ── */
         .voice-hero { text-align: center; padding: 10px 4px 6px; margin-bottom: 6px; }
+        /* 語音摘要文字變長、畫面往下捲動時，按鈕還是要隨時按得到，
+           所以只把「按鈕本身」凍結在畫面頂端，摘要文字/提示照常往下排版即可 */
+        .voice-btn-sticky {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: white;
+            padding: 6px 0 4px;
+        }
         .voice-btn-big {
             width: 100%;
             padding: 26px 10px;
@@ -443,9 +452,6 @@
 <body>
 
 <div class="container">
-    <div style="background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:8px 12px;font-size:12px;color:#e65100;margin-bottom:10px;">
-        ⚠️ 這是「全語音對話」功能測試頁，紀錄會存到獨立的測試資料檔，<b>不會</b>寫入正式歷史資料庫，可以放心亂測。
-    </div>
     <div class="header-row">
         <h2><span class="emoji-lg">🗣️</span> 2年1班麻將計分（語音秘書）</h2>
         <div class="header-btns">
@@ -467,9 +473,11 @@
 
     <!-- 全語音互動的核心：說話就好，畫面只負責唸給你聽的內容跟目前比分 -->
     <div class="voice-hero">
-        <button type="button" id="voiceBtn" onclick="startVoiceChatFlow()" class="voice-btn-big">
-            <span class="mic-emoji">🎤</span>按這裡開始說話
-        </button>
+        <div class="voice-btn-sticky">
+            <button type="button" id="voiceBtn" onclick="startVoiceChatFlow()" class="voice-btn-big">
+                <span class="mic-emoji">🎤</span>按這裡開始說話
+            </button>
+        </div>
         <div id="voiceStatus" class="voice-status-big"></div>
         <div class="voice-hint">說戰績 → 唸摘要 → 說「確認」或「取消」→ 自動送出<br>缺什麼會直接問你（例如「胡家是誰？」），不用整句重講<br>想聽總分時，說「播報戰績」</div>
     </div>
