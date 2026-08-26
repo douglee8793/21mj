@@ -417,7 +417,11 @@
             </div>
             <div class="control-group">
                 <label>莊家加台</label>
-                <input type="number" id="extraTai" value="0">
+                <div class="tai-stepper">
+                    <button type="button" class="tai-step-btn" onclick="stepExtraTai(-1)">－</button>
+                    <input type="number" id="extraTai" value="0" min="0" inputmode="numeric" onblur="clampExtraTai(this)">
+                    <button type="button" class="tai-step-btn" onclick="stepExtraTai(1)">＋</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1096,6 +1100,17 @@
         const min = winType == "1" ? 1 : 0;
         const val = parseInt(input.value) || 0;
         input.value = Math.max(min, val + delta);
+    }
+
+    // 莊家加台：自摸模式專用，最低0台（不用加台就維持0），同樣改用+/-按鈕。
+    function clampExtraTai(input) {
+        const val = parseInt(input.value);
+        if (isNaN(val) || val < 0) input.value = 0;
+    }
+    function stepExtraTai(delta) {
+        const input = document.getElementById('extraTai');
+        const val = parseInt(input.value) || 0;
+        input.value = Math.max(0, val + delta);
     }
 
     // ── 語音播報（純輸出，不接收語音輸入）──
