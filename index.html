@@ -85,6 +85,23 @@
             font-size: 16px;
             width: 100%;
             max-width: 100%;
+            box-sizing: border-box;
+        }
+        /* 部分 Android 內建瀏覽器（如某些品牌機的系統 WebView）會用系統原生外觀畫
+           select，遇到窄欄位或深色系統主題時，已選文字會被畫成看不見、只剩下拉箭頭。
+           改用自訂外觀（關掉原生 appearance、明確指定底色/字色、自畫箭頭），
+           確保在任何瀏覽器上文字都看得到。 */
+        select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-color: #fff;
+            color: #333;
+            padding-right: 32px;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23673ab7' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 16px;
         }
         .toggle-group {
             display: flex;
@@ -1114,12 +1131,14 @@
     }
 
     // ── 語音播報（純輸出，不接收語音輸入）──
-    function speakAsync(text) {
+    // rate 預設放慢到 0.9（原本 1.15 實測太快、聽不清楚）；
+    // 播報「所有人」戰績內容較長，另外再放更慢一點方便聽清楚。
+    function speakAsync(text, rate = 0.9) {
         return new Promise((resolve) => {
             if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { resolve(); return; }
             const utter = new SpeechSynthesisUtterance(text);
             utter.lang = 'zh-TW';
-            utter.rate = 1.15;
+            utter.rate = rate;
             utter.onend = resolve;
             utter.onerror = resolve;
             speechSynthesis.cancel();
@@ -1130,7 +1149,7 @@
     // 播報「目前所有人」的累積總分，不篩選（跟每局結束後只播報「當局」有變動的人不同）
     async function announceStandings() {
         const scoreText = PLAYERS.map(p => p + (totalScores[p] >= 0 ? ' 加 ' : ' 負 ') + Math.abs(totalScores[p])).join('，');
-        await speakAsync('本場目前戰績：' + scoreText);
+        await speakAsync('本場目前戰績：' + scoreText, 0.8);
     }
 
     function init() {
