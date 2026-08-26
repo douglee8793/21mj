@@ -264,6 +264,16 @@
             border-radius: 10px;
             margin-bottom: 15px;
         }
+        /* 「勝負方式」每局都要操作，獨立成跟莊家區塊同等級的高頻率操作區，
+           視覺上跟上面settings-grid的低頻率(一場設定一次)項目做出區隔。 */
+        #winTypeSection {
+            text-align: center;
+            padding: 10px 15px;
+            background: #ede7f6;
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+        #winTypeSection label { display: block; margin-bottom: 6px; }
 
         /* ── Modal overlay ── */
         .modal-overlay {
@@ -458,23 +468,27 @@
                 <div class="picker-group" id="idlePicker"></div>
             </details>
         </div>
-        <div class="control-group" style="grid-column: span 2;">
-            <label>勝負方式</label>
-            <!-- 原生 select 在部分 Android 瀏覽器上會整個顯示不出來，隱藏起來只當
-                 資料來源用，畫面上改用跟「莊家是誰」一致的按鈕點選（winTypePicker）。
-                 保留這個 select 是因為 addRecord()/renderPlayers() 等既有邏輯都是
-                 讀它的 .value，這樣不用大幅改動計分相關程式碼。放滿版寬(span 2)是
-                 因為欄位太窄時，放炮/自摸兩顆按鈕會被擠到換行、變成直排。 -->
-            <select id="winType" onchange="resetSelections(); renderPlayers();" style="display:none;">
-                <option value="0">放炮</option>
-                <option value="1">自摸</option>
-            </select>
-            <div class="picker-group" id="winTypePicker"></div>
-        </div>
         <div class="toggle-group">
             <label><input type="checkbox" id="autoRotate" checked> 自動換閒家</label>
             <label><input type="checkbox" id="flowerEnabled" onchange="renderPlayers()"> 插花功能</label>
         </div>
+    </div>
+
+    <!-- 「勝負方式」每一局都要用到，使用頻率遠高於上面settings-grid裡那些
+         一場通常只設定一次的項目（底價/台金/閒家/自動換閒家/插花功能），
+         所以獨立成自己的區塊，放在跟它同樣「每局都要操作」的莊家/台數輸入
+         正上方，操作動線比較順，也避免跟低頻率的checkbox排在一起容易誤觸。 -->
+    <div id="winTypeSection">
+        <label>勝負方式</label>
+        <!-- 原生 select 在部分 Android 瀏覽器上會整個顯示不出來，隱藏起來只當
+             資料來源用，畫面上改用跟「莊家是誰」一致的按鈕點選（winTypePicker）。
+             保留這個 select 是因為 addRecord()/renderPlayers() 等既有邏輯都是
+             讀它的 .value，這樣不用大幅改動計分相關程式碼。 -->
+        <select id="winType" onchange="resetSelections(); renderPlayers();" style="display:none;">
+            <option value="0">放炮</option>
+            <option value="1">自摸</option>
+        </select>
+        <div class="picker-group" id="winTypePicker"></div>
     </div>
 
     <div id="dealerSection" style="display:none;">
