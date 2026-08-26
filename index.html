@@ -172,17 +172,20 @@
         .btn-flower { background: #eceff1; color: #607d8b; width: 100%; }
         .btn-flower.selected { background: #673ab7; color: white; }
 
-        /* ── 閒家／莊家挑選：改用按鈕點選，取代原生 select。
+        /* ── 閒家／莊家／勝負方式挑選：改用按鈕點選，取代原生 select。
            部分 Android 瀏覽器（實測 Realme 機型 Chrome）在特定情況下會把 select
-           已選文字畫成看不見，只剩下拉箭頭；改用按鈕點選可完全避開這類原生
-           表單元件渲染問題。用 CSS grid（而非 flex）排列，避免最後一行只剩
-           單一按鈕時被拉伸成整排寬度（桌機 Chrome 實測會發生）。 ── */
+           已選文字畫成看不見，只剩下拉箭頭（甚至整個選單看不到）；改用按鈕
+           點選可完全避開這類原生表單元件渲染問題。用 flex + justify-content:
+           center（而非 grid 的 1fr 平分寬度）：按鈕依文字內容自然寬度置中排列，
+           不會把版面撐滿，也不會有「最後一行只剩單一按鈕被拉伸成整排寬」的
+           問題（桌機 Chrome 用 grid 1fr 時實測會發生）。 ── */
         .picker-group {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
             gap: 6px;
         }
-        .picker-btn { background: #ddd; color: #666; padding: 10px 8px; }
+        .picker-btn { background: #ddd; color: #666; padding: 10px 16px; min-width: 64px; }
         .picker-btn.picker-selected { background: var(--primary); color: white; }
 
         /* ── 閒家選擇：平時自動輪替，很少手動改，收合成一行、點了才展開，
@@ -456,10 +459,15 @@
         </div>
         <div class="control-group">
             <label>勝負方式</label>
-            <select id="winType" onchange="resetSelections(); renderPlayers();">
+            <!-- 原生 select 在部分 Android 瀏覽器上會整個顯示不出來，隱藏起來只當
+                 資料來源用，畫面上改用跟「莊家是誰」一致的按鈕點選（winTypePicker）。
+                 保留這個 select 是因為 addRecord()/renderPlayers() 等既有邏輯都是
+                 讀它的 .value，這樣不用大幅改動計分相關程式碼。 -->
+            <select id="winType" onchange="resetSelections(); renderPlayers();" style="display:none;">
                 <option value="0">放炮</option>
                 <option value="1">自摸</option>
             </select>
+            <div class="picker-group" id="winTypePicker"></div>
         </div>
         <div class="toggle-group">
             <label><input type="checkbox" id="autoRotate" checked> 自動換閒家</label>
@@ -1234,12 +1242,35 @@
         if (details) details.removeAttribute('open');
     }
 
+    // 「勝負方式」畫面上改用按鈕點選（跟「莊家是誰」一致），實際值仍然寫回
+    // 隱藏的 #winType select，其他既有程式碼完全不用改。
+    function renderWinTypePicker() {
+        const winType = document.getElementById('winType').value;
+        const box = document.getElementById('winTypePicker');
+        box.innerHTML = '';
+        [['0', '放炮'], ['1', '自摸']].forEach(([val, label]) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'picker-btn' + (winType === val ? ' picker-selected' : '');
+            btn.innerText = label;
+            btn.onclick = () => chooseWinType(val);
+            box.appendChild(btn);
+        });
+    }
+
+    function chooseWinType(val) {
+        document.getElementById('winType').value = val;
+        resetSelections();
+        renderPlayers();
+    }
+
     function renderPlayers() {
         const grid = document.getElementById('playerGrid');
         const winType = document.getElementById('winType').value;
         const flowerEnabled = document.getElementById('flowerEnabled').checked;
         const dealerSection = document.getElementById('dealerSection');
 
+        renderWinTypePicker();
         dealerSection.style.display = winType == "1" ? "block" : "none";
 
         const taiInput = document.getElementById('taiCount');
