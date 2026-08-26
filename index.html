@@ -172,6 +172,14 @@
         .btn-flower { background: #eceff1; color: #607d8b; width: 100%; }
         .btn-flower.selected { background: #673ab7; color: white; }
 
+        /* ── 閒家／莊家挑選：改用跟胡/炮/自摸一致的按鈕點選，取代原生 select。
+           部分 Android 瀏覽器（實測 Realme 機型 Chrome）在特定情況下會把 select
+           已選文字畫成看不見，只剩下拉箭頭；改用按鈕點選可完全避開這類原生
+           表單元件渲染問題，觸控體驗也更直接。 ── */
+        .picker-group { display: flex; flex-wrap: wrap; gap: 6px; }
+        .picker-btn { background: #eee; color: #333; padding: 10px 8px; flex: 1; min-width: 56px; }
+        .picker-btn.picker-selected { background: var(--primary); color: white; }
+
         /* ── Action buttons ── */
         .main-action {
             width: 100%;
@@ -411,7 +419,7 @@
         </div>
         <div class="control-group">
             <label>目前閒家(不打)</label>
-            <select id="idleSelect" onchange="assignSeats()"></select>
+            <div class="picker-group" id="idlePicker"></div>
         </div>
         <div class="control-group">
             <label>勝負方式</label>
@@ -430,7 +438,7 @@
         <div style="display:flex; flex-wrap:wrap; justify-content:space-around; align-items:center; gap:10px;">
             <div class="control-group">
                 <label>莊家是誰？</label>
-                <select id="dealerSelect"></select>
+                <div class="picker-group" id="dealerPicker"></div>
             </div>
             <div class="control-group">
                 <label>莊家加台</label>
@@ -573,7 +581,7 @@
     // ── Game state ──
     let idleIndex = 0;
     let seatIndices = [];
-    let records = { hu: null, pao: null, zimo: null, flowerTarget: null };
+    let records = { hu: null, pao: null, zimo: null, flowerTarget: null, dealer: null };
     let history = [];
     let totalScores = {};
     PLAYERS.forEach(p => totalScores[p] = 0);
@@ -1153,20 +1161,39 @@
     }
 
     function init() {
-        const idleSelect = document.getElementById('idleSelect');
-        PLAYERS.forEach((name, i) => idleSelect.add(new Option(name, i)));
+        renderIdlePicker();
         assignSeats();
     }
 
     function assignSeats() {
-        idleIndex = parseInt(document.getElementById('idleSelect').value);
         seatIndices = [0,1,2,3,4].filter(i => i !== idleIndex);
         resetSelections();
         renderPlayers();
+        renderIdlePicker();
     }
 
     function resetSelections() {
-        records = { hu: null, pao: null, zimo: null, flowerTarget: null };
+        records = { hu: null, pao: null, zimo: null, flowerTarget: null, dealer: null };
+    }
+
+    // 「目前閒家(不打)」改用按鈕點選（原本的 select 在部分 Android 瀏覽器上
+    // 已選文字會顯示不出來），5位玩家都可能是閒家，全部列出來點。
+    function renderIdlePicker() {
+        const box = document.getElementById('idlePicker');
+        box.innerHTML = '';
+        PLAYERS.forEach((name, i) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'picker-btn' + (idleIndex === i ? ' picker-selected' : '');
+            btn.innerText = name;
+            btn.onclick = () => chooseIdle(i);
+            box.appendChild(btn);
+        });
+    }
+
+    function chooseIdle(i) {
+        idleIndex = i;
+        assignSeats();
     }
 
     function renderPlayers() {
@@ -1185,9 +1212,23 @@
             taiInput.min = 0;
         }
 
-        const dSelect = document.getElementById('dealerSelect');
-        dSelect.innerHTML = "";
-        seatIndices.forEach(idx => dSelect.add(new Option(PLAYERS[idx], idx)));
+        // 莊家（僅自摸模式用）：改用按鈕點選，同時保留使用者已經選好的莊家，
+        // 只有在目前紀錄的莊家不存在/不在座（例如換閒家後）時才重新預設成座位第一位。
+        const dealerPicker = document.getElementById('dealerPicker');
+        dealerPicker.innerHTML = '';
+        if (winType == "1") {
+            if (records.dealer === null || !seatIndices.includes(records.dealer)) {
+                records.dealer = seatIndices[0];
+            }
+            seatIndices.forEach(idx => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'picker-btn' + (records.dealer === idx ? ' picker-selected' : '');
+                btn.innerText = PLAYERS[idx];
+                btn.onclick = () => chooseDealer(idx);
+                dealerPicker.appendChild(btn);
+            });
+        }
 
         grid.innerHTML = "";
         seatIndices.forEach(idx => {
@@ -1250,6 +1291,11 @@
         renderPlayers();
     }
 
+    function chooseDealer(idx) {
+        records.dealer = idx;
+        renderPlayers();
+    }
+
     function addRecord() {
         if (draftLocked) { alert('🔒 此場已在其他裝置完成結算，請重新整理頁面開始新場次。'); return; }
         const winType = document.getElementById('winType').value;
@@ -1290,7 +1336,7 @@
             confirmMsg += flowerMsg;
         } else {
             if (records.zimo === null) return alert("請選自摸家");
-            let dealerIdx = parseInt(document.getElementById('dealerSelect').value);
+            let dealerIdx = records.dealer;
             let extraTaiCount = parseInt(document.getElementById('extraTai').value);
             let baseWin = base + tai * perTai;
             let dealerAdd = extraTaiCount * perTai;
@@ -1346,7 +1392,7 @@
         if (deltaParts.length) speakAsync('當局：' + deltaParts.join('，'));
 
         if (winType == "0" && document.getElementById('autoRotate').checked) {
-            document.getElementById('idleSelect').value = records.pao;
+            idleIndex = records.pao;
             assignSeats();
         }
 
@@ -1461,7 +1507,7 @@
         if (s.winType !== undefined) document.getElementById('winType').value = s.winType;
         if (s.autoRotate !== undefined) document.getElementById('autoRotate').checked = s.autoRotate;
         if (s.flowerEnabled !== undefined) document.getElementById('flowerEnabled').checked = s.flowerEnabled;
-        if (s.idleIndex !== undefined) document.getElementById('idleSelect').value = s.idleIndex;
+        if (s.idleIndex !== undefined) idleIndex = s.idleIndex;
 
         assignSeats();
         updateTable();
@@ -1509,8 +1555,7 @@
     });
 
     async function init() {
-        const idleSelect = document.getElementById('idleSelect');
-        PLAYERS.forEach((name, i) => idleSelect.add(new Option(name, i)));
+        renderIdlePicker();
 
         const hasPendingDraft = await checkForDraft();
         if (!hasPendingDraft) assignSeats();
