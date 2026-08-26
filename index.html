@@ -65,10 +65,10 @@
         .settings-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 15px;
+            gap: 8px 12px;
+            margin-bottom: 12px;
             background: #fff3e0;
-            padding: 15px;
+            padding: 12px;
             border-radius: 10px;
         }
         @media (max-width: 480px) {
@@ -106,7 +106,8 @@
         .toggle-group {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-start;
+            gap: 24px;
             font-size: 14px;
             grid-column: span 2;
         }
@@ -457,12 +458,13 @@
                 <div class="picker-group" id="idlePicker"></div>
             </details>
         </div>
-        <div class="control-group">
+        <div class="control-group" style="grid-column: span 2;">
             <label>勝負方式</label>
             <!-- 原生 select 在部分 Android 瀏覽器上會整個顯示不出來，隱藏起來只當
                  資料來源用，畫面上改用跟「莊家是誰」一致的按鈕點選（winTypePicker）。
                  保留這個 select 是因為 addRecord()/renderPlayers() 等既有邏輯都是
-                 讀它的 .value，這樣不用大幅改動計分相關程式碼。 -->
+                 讀它的 .value，這樣不用大幅改動計分相關程式碼。放滿版寬(span 2)是
+                 因為欄位太窄時，放炮/自摸兩顆按鈕會被擠到換行、變成直排。 -->
             <select id="winType" onchange="resetSelections(); renderPlayers();" style="display:none;">
                 <option value="0">放炮</option>
                 <option value="1">自摸</option>
