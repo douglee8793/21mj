@@ -172,13 +172,40 @@
         .btn-flower { background: #eceff1; color: #607d8b; width: 100%; }
         .btn-flower.selected { background: #673ab7; color: white; }
 
-        /* ── 閒家／莊家挑選：改用跟胡/炮/自摸一致的按鈕點選，取代原生 select。
+        /* ── 閒家／莊家挑選：改用按鈕點選，取代原生 select。
            部分 Android 瀏覽器（實測 Realme 機型 Chrome）在特定情況下會把 select
            已選文字畫成看不見，只剩下拉箭頭；改用按鈕點選可完全避開這類原生
-           表單元件渲染問題，觸控體驗也更直接。 ── */
-        .picker-group { display: flex; flex-wrap: wrap; gap: 6px; }
-        .picker-btn { background: #eee; color: #333; padding: 10px 8px; flex: 1; min-width: 56px; }
+           表單元件渲染問題。用 CSS grid（而非 flex）排列，避免最後一行只剩
+           單一按鈕時被拉伸成整排寬度（桌機 Chrome 實測會發生）。 ── */
+        .picker-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
+            gap: 6px;
+        }
+        .picker-btn { background: #ddd; color: #666; padding: 10px 8px; }
         .picker-btn.picker-selected { background: var(--primary); color: white; }
+
+        /* ── 閒家選擇：平時自動輪替，很少手動改，收合成一行、點了才展開，
+           避免每次都佔用一大塊版面、也降低誤觸機率（跟原本 select 一樣要
+           先點進去才能選，但用<details>取代<select>，同樣不會有原生select
+           在Android上文字消失的問題）。 ── */
+        .idle-details { border: 1px solid #ddd; border-radius: 5px; background: #fff; }
+        .idle-summary {
+            padding: 10px;
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        .idle-summary::-webkit-details-marker { display: none; }
+        .idle-summary .chev { color: var(--primary); transition: 0.2s; }
+        .idle-details[open] .idle-summary { border-bottom: 1px solid #eee; }
+        .idle-details[open] .idle-summary .chev { transform: rotate(180deg); }
+        .idle-details .picker-group { padding: 8px; }
 
         /* ── Action buttons ── */
         .main-action {
@@ -419,7 +446,13 @@
         </div>
         <div class="control-group">
             <label>目前閒家(不打)</label>
-            <div class="picker-group" id="idlePicker"></div>
+            <details class="idle-details" id="idleDetails">
+                <summary class="idle-summary">
+                    <span id="idleCurrentName">－</span>
+                    <span class="chev">▾</span>
+                </summary>
+                <div class="picker-group" id="idlePicker"></div>
+            </details>
         </div>
         <div class="control-group">
             <label>勝負方式</label>
@@ -1176,9 +1209,14 @@
         records = { hu: null, pao: null, zimo: null, flowerTarget: null, dealer: null };
     }
 
-    // 「目前閒家(不打)」改用按鈕點選（原本的 select 在部分 Android 瀏覽器上
-    // 已選文字會顯示不出來），5位玩家都可能是閒家，全部列出來點。
+    // 「目前閒家(不打)」平時是自動輪替、很少手動改，改用 <details> 收合成
+    // 一行（跟原本 select 佔的版面差不多），點開才顯示5位玩家的按鈕清單，
+    // 選完自動收合。用 <details> 取代 <select>，一樣要點進去才能選（不易誤觸），
+    // 但不會有原生 select 在部分 Android 瀏覽器上文字顯示不出來的問題。
     function renderIdlePicker() {
+        const nameEl = document.getElementById('idleCurrentName');
+        if (nameEl) nameEl.textContent = PLAYERS[idleIndex];
+
         const box = document.getElementById('idlePicker');
         box.innerHTML = '';
         PLAYERS.forEach((name, i) => {
@@ -1194,6 +1232,8 @@
     function chooseIdle(i) {
         idleIndex = i;
         assignSeats();
+        const details = document.getElementById('idleDetails');
+        if (details) details.removeAttribute('open');
     }
 
     function renderPlayers() {
