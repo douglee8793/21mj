@@ -444,7 +444,7 @@
             <label>台金</label>
             <input type="number" id="maxTai" value="30">
         </div>
-        <div class="control-group">
+        <div class="control-group" style="grid-column: span 2;">
             <label>目前閒家(不打)</label>
             <details class="idle-details" id="idleDetails">
                 <summary class="idle-summary">
@@ -468,18 +468,16 @@
     </div>
 
     <div id="dealerSection" style="display:none;">
-        <div style="display:flex; flex-wrap:wrap; justify-content:space-around; align-items:center; gap:10px;">
-            <div class="control-group">
-                <label>莊家是誰？</label>
-                <div class="picker-group" id="dealerPicker"></div>
-            </div>
-            <div class="control-group">
-                <label>莊家加台</label>
-                <div class="tai-stepper">
-                    <button type="button" class="tai-step-btn" onclick="stepExtraTai(-1)">－</button>
-                    <input type="number" id="extraTai" value="0" min="0" inputmode="numeric" onblur="clampExtraTai(this)">
-                    <button type="button" class="tai-step-btn" onclick="stepExtraTai(1)">＋</button>
-                </div>
+        <div class="control-group">
+            <label>莊家是誰？</label>
+            <div class="picker-group" id="dealerPicker"></div>
+        </div>
+        <div class="control-group" style="margin-top:12px;">
+            <label>莊家加台</label>
+            <div class="tai-stepper">
+                <button type="button" class="tai-step-btn" onclick="stepExtraTai(-1)">－</button>
+                <input type="number" id="extraTai" value="0" min="0" inputmode="numeric" onblur="clampExtraTai(this)">
+                <button type="button" class="tai-step-btn" onclick="stepExtraTai(1)">＋</button>
             </div>
         </div>
     </div>
