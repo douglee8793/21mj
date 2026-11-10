@@ -958,7 +958,8 @@
     // ── Save session ──
     function openSaveModal() {
         if (history.length === 0) return alert('本場尚未有任何紀錄');
-        const today = new Date().toISOString().split('T')[0];
+        const now = new Date();
+        const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
         document.getElementById('sessionDate').value = today;
         document.getElementById('sessionVenue').value = '詹偉凱家';
         // preview
@@ -1387,6 +1388,7 @@
         const base = parseInt(document.getElementById('baseScore').value);
         const perTai = parseInt(document.getElementById('maxTai').value);
         const tai = parseInt(document.getElementById('taiCount').value);
+        if (isNaN(base) || isNaN(perTai) || isNaN(tai)) return alert('底、台金或台數未填寫或不是有效數字，無法紀錄');
         if (winType == "0" && tai < 0) return alert("放炮台數不能是負數");
         if (winType == "1" && tai < 1) return alert("自摸台數最少需要 1 台");
 
