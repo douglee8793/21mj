@@ -135,6 +135,26 @@
             cursor: pointer;
         }
         .tai-step-btn:active { opacity: 0.75; }
+        .tai-step-btn:disabled {
+            background: #bdbdbd;
+            color: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        /* 莊家自己自摸時，莊家加台不會列入計分，輸入框停用並在旁邊提示。 */
+        .extra-tai-hint {
+            margin: 4px 0 0;
+            font-size: 13px;
+            font-weight: normal;
+            color: #e65100;
+            line-height: 1.45;
+        }
+        #extraTaiHint[hidden] { display: none !important; }
+        #extraTai:disabled {
+            background: #eee;
+            color: #999;
+            cursor: not-allowed;
+        }
 
         /* ── Player cards ── */
         .player-grid {
@@ -499,10 +519,11 @@
         <div class="control-group" style="margin-top:12px;">
             <label>莊家加台</label>
             <div class="tai-stepper">
-                <button type="button" class="tai-step-btn" onclick="stepExtraTai(-1)">－</button>
+                <button type="button" class="tai-step-btn" id="extraTaiMinus" onclick="stepExtraTai(-1)">－</button>
                 <input type="number" id="extraTai" value="0" min="0" inputmode="numeric" onblur="clampExtraTai(this)">
-                <button type="button" class="tai-step-btn" onclick="stepExtraTai(1)">＋</button>
+                <button type="button" class="tai-step-btn" id="extraTaiPlus" onclick="stepExtraTai(1)">＋</button>
             </div>
+            <p id="extraTaiHint" class="extra-tai-hint" hidden>莊家自摸，莊家台請直接算進總台數</p>
         </div>
     </div>
 
@@ -1190,8 +1211,24 @@
     }
     function stepExtraTai(delta) {
         const input = document.getElementById('extraTai');
+        if (input.disabled) return;
         const val = parseInt(input.value) || 0;
         input.value = Math.max(0, val + delta);
+    }
+
+    // 莊家自己自摸時，addRecord 不會把莊家加台算進去。
+    // 只把輸入鎖起來、在旁邊顯示提示，不改欄位裡的數字，也不改計分。
+    function syncExtraTaiState() {
+        const input = document.getElementById('extraTai');
+        const hint = document.getElementById('extraTaiHint');
+        if (!input || !hint) return;
+        const dealerSelfDraw = records.zimo !== null && records.zimo === records.dealer;
+        input.disabled = dealerSelfDraw;
+        hint.hidden = !dealerSelfDraw;
+        const minus = document.getElementById('extraTaiMinus');
+        const plus = document.getElementById('extraTaiPlus');
+        if (minus) minus.disabled = dealerSelfDraw;
+        if (plus) plus.disabled = dealerSelfDraw;
     }
 
     // ── 語音播報（純輸出，不接收語音輸入）──
@@ -1357,6 +1394,8 @@
             card.appendChild(btnGroup);
             grid.appendChild(card);
         });
+
+        syncExtraTaiState();
     }
 
     function setRole(role, idx) {

@@ -94,6 +94,21 @@
             grid-column: span 2;
         }
 
+        /* 莊家自己自摸時，莊家加台不會列入計分，輸入框停用並在旁邊提示。 */
+        .extra-tai-hint {
+            margin: 4px 0 0;
+            font-size: 13px;
+            font-weight: normal;
+            color: #e65100;
+            line-height: 1.45;
+        }
+        #extraTaiHint[hidden] { display: none !important; }
+        #extraTai:disabled {
+            background: #eee;
+            color: #999;
+            cursor: not-allowed;
+        }
+
         /* ── Player cards ── */
         .player-grid {
             display: grid;
@@ -392,11 +407,12 @@
         <div style="display:flex; flex-wrap:wrap; justify-content:space-around; align-items:center; gap:10px;">
             <div class="control-group">
                 <label>莊家是誰？</label>
-                <select id="dealerSelect"></select>
+                <select id="dealerSelect" onchange="syncExtraTaiState()"></select>
             </div>
             <div class="control-group">
                 <label>莊家加台</label>
                 <input type="number" id="extraTai" value="0">
+                <p id="extraTaiHint" class="extra-tai-hint" hidden>莊家自摸，莊家台請直接算進總台數</p>
             </div>
         </div>
     </div>
@@ -1142,6 +1158,20 @@
         records = { hu: null, pao: null, zimo: null, flowerTarget: null };
     }
 
+    // 莊家自己自摸時，addRecord 不會把莊家加台算進去。
+    // 只把輸入鎖起來、在旁邊顯示提示，不改欄位裡的數字，也不改計分。
+    // 莊家是下拉選單（語音套用時也是寫進這個選單），跟自摸家比對。
+    function syncExtraTaiState() {
+        const input = document.getElementById('extraTai');
+        const hint = document.getElementById('extraTaiHint');
+        if (!input || !hint) return;
+        const sel = document.getElementById('dealerSelect');
+        const dealerIdx = (sel && sel.value !== '') ? parseInt(sel.value, 10) : NaN;
+        const dealerSelfDraw = records.zimo !== null && !Number.isNaN(dealerIdx) && records.zimo === dealerIdx;
+        input.disabled = dealerSelfDraw;
+        hint.hidden = !dealerSelfDraw;
+    }
+
     function renderPlayers() {
         const grid = document.getElementById('playerGrid');
         const winType = document.getElementById('winType').value;
@@ -1203,6 +1233,8 @@
             card.appendChild(btnGroup);
             grid.appendChild(card);
         });
+
+        syncExtraTaiState();
     }
 
     function setRole(role, idx) {
@@ -1724,6 +1756,8 @@
             document.getElementById('extraTai').value = (r.extraTai !== null) ? r.extraTai : 0;
         }
 
+        // 語音是在最後一次 renderPlayers() 之後才寫入莊家與莊家加台，這裡再同步一次停用/提示。
+        syncExtraTaiState();
         return true;
     }
 
